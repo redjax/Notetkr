@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/redjax/notetkr/internal/config"
+
 	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
@@ -17,6 +19,7 @@ var (
 	cfgFile string
 	debug   bool
 	k       = koanf.New(".")
+	cfg     *config.Config
 )
 
 var rootCmd = &cobra.Command{
@@ -52,6 +55,9 @@ func init() {
 }
 
 func initConfig() {
+	// Initialize config with defaults
+	cfg = config.DefaultConfig()
+
 	if cfgFile != "" {
 		if err := k.Load(file.Provider(cfgFile), json.Parser()); err != nil {
 			fmt.Fprintf(os.Stderr, "Error loading config file: %v\n", err)
@@ -65,6 +71,9 @@ func initConfig() {
 			strings.TrimPrefix(s, "NOTETKR_")), "_", ".", -1)
 	}), nil)
 
-	// Optionally, unmarshal config object into a struct
-	// k.Unmarshal("", &yourConfigStruct)
+	// Unmarshal config values into the struct
+	if err := k.Unmarshal("", cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "Error unmarshaling config: %v\n", err)
+		os.Exit(1)
+	}
 }
