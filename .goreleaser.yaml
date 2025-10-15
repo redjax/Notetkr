@@ -7,6 +7,7 @@
 # vim: set ts=2 sw=2 tw=0 fo=cnqoj
 
 version: 2
+project_name: notetkr
 
 before:
   hooks:
@@ -16,15 +17,25 @@ before:
     - go generate ./...
 
 builds:
-  - env:
+  - id: notetkr
+    binary: nt
+    env:
       - CGO_ENABLED=0
+    main: ./cmd/entrypoints/main.go
     goos:
       - linux
       - windows
       - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
 
 archives:
-  - formats: [tar.gz]
+  - formats: 
+      - tar.gz
     # this name template makes the OS and Arch compatible with the results of `uname`.
     name_template: >-
       {{ .ProjectName }}_
