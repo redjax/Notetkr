@@ -23,6 +23,9 @@ var K = koanf.New(".")
 // Config holds the application configuration
 type Config struct {
 	ConfigFile string `koanf:"config.file"`
+	NotesDir   string `koanf:"notes.dir"`
+	JournalDir string `koanf:"journal.dir"`
+	DataDir    string `koanf:"data.dir"`
 }
 
 func DefaultConfig() *Config {
@@ -31,8 +34,13 @@ func DefaultConfig() *Config {
 		homeDir = "."
 	}
 
+	dataDir := filepath.Join(homeDir, ".notetkr")
+
 	return &Config{
-		ConfigFile: filepath.Join(homeDir, ".notetkr", "notetkr.yml"),
+		ConfigFile: filepath.Join(dataDir, "notetkr.yml"),
+		DataDir:    dataDir,
+		NotesDir:   filepath.Join(dataDir, "notes"),
+		JournalDir: filepath.Join(dataDir, "journal"),
 	}
 }
 
