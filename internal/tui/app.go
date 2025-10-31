@@ -13,6 +13,8 @@ type AppModel struct {
 	journalService *services.JournalService
 	journalDir     string
 	notesDir       string
+	width          int
+	height         int
 }
 
 // NewAppModel creates a new app model with dashboard as initial view
@@ -46,6 +48,12 @@ func (m AppModel) Init() tea.Cmd {
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
+	// Track window size
+	if msg, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width = msg.Width
+		m.height = msg.Height
+	}
+
 	// Handle menu selections
 	switch msg := msg.(type) {
 	case MenuSelectionMsg:
@@ -53,11 +61,19 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "today-journal":
 			// Open today's journal in editor
 			m.currentView = NewJournalEditor(m.journalService, time.Now())
-			return m, m.currentView.Init()
+			// Send window size to new view
+			if m.width > 0 && m.height > 0 {
+				m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+			}
+			return m, tea.Batch(cmd, m.currentView.Init())
 		case "journals":
 			// Open journal browser
 			m.currentView = NewJournalBrowser(m.journalService, m.journalDir)
-			return m, m.currentView.Init()
+			// Send window size to new view
+			if m.width > 0 && m.height > 0 {
+				m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+			}
+			return m, tea.Batch(cmd, m.currentView.Init())
 		case "notes":
 			// TODO: Implement notes browser
 			return m, nil
@@ -65,7 +81,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case OpenJournalMsg:
 		// Open specific journal date in editor
 		m.currentView = NewJournalEditor(m.journalService, msg.date)
-		return m, m.currentView.Init()
+		// Send window size to new view
+		if m.width > 0 && m.height > 0 {
+			m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		}
+		return m, tea.Batch(cmd, m.currentView.Init())
 	}
 
 	m.currentView, cmd = m.currentView.Update(msg)

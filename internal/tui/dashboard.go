@@ -109,6 +109,15 @@ func (m DashboardModel) View() string {
 
 	s += "\n" + helpStyle.Render("↑/k: up • ↓/j: down • enter/l: select • q: quit")
 
+	// Center the content and fill the screen
+	if m.width > 0 && m.height > 0 {
+		style := lipgloss.NewStyle().
+			Width(m.width).
+			Height(m.height).
+			Align(lipgloss.Center, lipgloss.Center)
+		return style.Render(s)
+	}
+
 	return s
 }
 

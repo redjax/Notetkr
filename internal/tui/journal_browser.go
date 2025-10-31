@@ -291,6 +291,14 @@ func (m JournalBrowserModel) View() string {
 
 	s += "\n" + helpStyle.Render("↑/k: up • ↓/j: down • enter/l: open • esc/h: back • d: delete • q: quit")
 
+	// Fill the screen
+	if m.width > 0 && m.height > 0 {
+		style := lipgloss.NewStyle().
+			Width(m.width).
+			Height(m.height)
+		return style.Render(s)
+	}
+
 	return s
 }
 

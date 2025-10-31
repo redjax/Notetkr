@@ -63,6 +63,9 @@ func NewJournalEditor(journalService *services.JournalService, date time.Time) J
 	ta.Focus() // Keep focused so cursor is visible
 	ta.CharLimit = 0
 	ta.ShowLineNumbers = false
+	// Set reasonable defaults that will be overridden by WindowSizeMsg
+	ta.SetWidth(80)
+	ta.SetHeight(20)
 
 	m := JournalEditorModel{
 		journalService: journalService,
@@ -295,7 +298,17 @@ func (m JournalEditorModel) View() string {
 	}
 	b.WriteString(editorHelpStyle.Render(help))
 
-	return b.String()
+	content := b.String()
+
+	// Fill the screen
+	if m.width > 0 && m.height > 0 {
+		style := lipgloss.NewStyle().
+			Width(m.width).
+			Height(m.height)
+		return style.Render(content)
+	}
+
+	return content
 }
 
 type JournalEditorLoadedMsg struct {
