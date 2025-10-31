@@ -28,10 +28,36 @@ func (j *JournalService) GetTodayJournalPath() string {
 func (j *JournalService) GetJournalPathForDate(date time.Time) string {
 	year := date.Format("2006")
 	month := date.Format("01")
-	day := date.Format("02")
+	weekNum := getWeekOfMonth(date)
 	filename := date.Format("2006-01-02.md")
 
-	return filepath.Join(j.journalDir, year, month, day, filename)
+	return filepath.Join(j.journalDir, year, month, fmt.Sprintf("Week%d", weekNum), filename)
+}
+
+// getWeekOfMonth calculates which week of the month the date falls in
+// Weeks start on Sunday
+func getWeekOfMonth(date time.Time) int {
+	// Get the first day of the month
+	firstDay := time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, date.Location())
+
+	// Find the first Sunday of the month (or if 1st is Sunday, that's week 1)
+	firstSunday := firstDay
+	for firstSunday.Weekday() != time.Sunday {
+		firstSunday = firstSunday.AddDate(0, 0, 1)
+	}
+
+	// If the date is before the first Sunday, it's in Week 1
+	if date.Before(firstSunday) {
+		return 1
+	}
+
+	// Calculate days since first Sunday
+	daysSinceFirstSunday := int(date.Sub(firstSunday).Hours() / 24)
+
+	// Week number is (days since first Sunday / 7) + 1
+	weekNum := (daysSinceFirstSunday / 7) + 1
+
+	return weekNum
 }
 
 // EnsureJournalDirExists creates the journal directory structure if it doesn't exist

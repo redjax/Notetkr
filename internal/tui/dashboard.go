@@ -32,8 +32,8 @@ func NewDashboard() DashboardModel {
 	return DashboardModel{
 		choices: []string{
 			"Today's Journal",
-			"Browse Notes",
-			"New Note",
+			"Journals",
+			"Notes",
 			"Quit",
 		},
 		cursor:   0,
@@ -67,22 +67,22 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor++
 			}
 
-		case "enter", " ":
+		case "enter", "l", "right", " ":
 			m.selected = m.cursor
 
 			// Handle menu selections
 			switch m.selected {
 			case 0: // Today's Journal
 				return m, func() tea.Msg {
-					return MenuSelectionMsg{Selection: "journal"}
+					return MenuSelectionMsg{Selection: "today-journal"}
 				}
-			case 1: // Browse Notes
+			case 1: // Journals
 				return m, func() tea.Msg {
-					return MenuSelectionMsg{Selection: "browse"}
+					return MenuSelectionMsg{Selection: "journals"}
 				}
-			case 2: // New Note
+			case 2: // Notes
 				return m, func() tea.Msg {
-					return MenuSelectionMsg{Selection: "new-note"}
+					return MenuSelectionMsg{Selection: "notes"}
 				}
 			case 3: // Quit
 				return m, tea.Quit
@@ -107,7 +107,7 @@ func (m DashboardModel) View() string {
 		s += "\n"
 	}
 
-	s += "\n" + helpStyle.Render("↑/k: up • ↓/j: down • enter: select • q: quit")
+	s += "\n" + helpStyle.Render("↑/k: up • ↓/j: down • enter/l: select • q: quit")
 
 	return s
 }

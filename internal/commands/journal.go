@@ -6,7 +6,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/redjax/notetkr/internal/config"
-	"github.com/redjax/notetkr/internal/services"
 	"github.com/redjax/notetkr/internal/tui"
 	"github.com/spf13/cobra"
 )
@@ -15,8 +14,8 @@ import (
 func NewJournalCmd(getConfig func() *config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "journal",
-		Short: "Open today's journal entry",
-		Long:  `Opens today's journal entry in a TUI. The journal will be created in the configured journal directory.`,
+		Short: "Browse and manage journal entries",
+		Long:  `Opens the journal browser to view and edit journal entries organized by date.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := getConfig()
 			runJournal(cfg)
@@ -27,14 +26,11 @@ func NewJournalCmd(getConfig func() *config.Config) *cobra.Command {
 }
 
 func runJournal(cfg *config.Config) {
-	// Ensure journal directory exists
-	journalService := services.NewJournalService(cfg.JournalDir)
-
-	// Create journal model
-	journalModel := tui.NewJournalModel(journalService)
+	// Open directly to journals view
+	app := tui.NewJournalBrowserApp(cfg.JournalDir, cfg.NotesDir)
 
 	// Start the TUI
-	p := tea.NewProgram(journalModel, tea.WithAltScreen())
+	p := tea.NewProgram(app, tea.WithAltScreen())
 
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error running journal TUI: %v\n", err)
