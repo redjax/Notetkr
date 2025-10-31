@@ -9,6 +9,7 @@ dist/
 *.dylib
 *.test
 *.out
+nt
 
 # Go workspace
 go.work

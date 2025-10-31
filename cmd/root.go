@@ -6,7 +6,10 @@ import (
 	"os"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/redjax/notetkr/internal/commands"
 	"github.com/redjax/notetkr/internal/config"
+	"github.com/redjax/notetkr/internal/tui"
 
 	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/providers/env"
@@ -27,7 +30,8 @@ var rootCmd = &cobra.Command{
 	Short: `Notetkr is a terminal-based note-taking and journaling app that uses Markdown for the notes.`,
 	// Long: ``
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+		// If no subcommand is provided, launch the dashboard TUI
+		runDashboard()
 	},
 }
 
@@ -36,11 +40,11 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (JSON)")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config-file", "c", "", "config file (supports .yml, .json, .toml, .env)")
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "D", false, "Enable debug logging")
 
-	// Add subcommands
-	// rootCmd.AddCommand(someCmd)
+	// Add subcommands - they will get config when executed
+	rootCmd.AddCommand(commands.NewJournalCmd(func() *config.Config { return cfg }))
 
 	// Handle persistent flags
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
@@ -74,6 +78,38 @@ func initConfig() {
 	// Unmarshal config values into the struct
 	if err := k.Unmarshal("", cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Error unmarshaling config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Ensure data directories exist
+	ensureDataDirs()
+}
+
+func ensureDataDirs() {
+	dirs := []string{
+		cfg.DataDir,
+		cfg.NotesDir,
+		cfg.JournalDir,
+	}
+
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating directory %s: %v\n", dir, err)
+			os.Exit(1)
+		}
+	}
+}
+
+func runDashboard() {
+	// Ensure directories exist
+	ensureDataDirs()
+
+	// Create and run the dashboard TUI
+	app := tui.NewAppModel(cfg.JournalDir, cfg.NotesDir)
+	p := tea.NewProgram(app, tea.WithAltScreen())
+
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error running dashboard: %v\n", err)
 		os.Exit(1)
 	}
 }
