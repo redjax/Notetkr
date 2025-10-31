@@ -33,7 +33,7 @@ var (
 			Padding(0, 0, 1, 0)
 
 	itemStyle = lipgloss.NewStyle().
-			PaddingLeft(2)
+			PaddingLeft(0)
 
 	selectedStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("170")).
