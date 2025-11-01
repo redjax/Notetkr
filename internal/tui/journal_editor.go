@@ -127,6 +127,8 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case JournalEditorLoadedMsg:
 		m.filePath = msg.filePath
 		m.textarea.SetValue(msg.content)
+		// Reset cursor to start of document
+		m.textarea.CursorStart()
 		return m, nil
 
 	case JournalEditorErrorMsg:
@@ -155,8 +157,10 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 
 			case "esc":
-				// Return to journal browser or dashboard
-				return NewDashboard(), nil
+				// Return to journal browser
+				return m, func() tea.Msg {
+					return BackToJournalBrowserMsg{}
+				}
 
 			case "i":
 				// Enter insert mode

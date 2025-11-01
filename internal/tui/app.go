@@ -11,6 +11,7 @@ import (
 type AppModel struct {
 	currentView    tea.Model
 	journalService *services.JournalService
+	notesService   *services.NotesService
 	journalDir     string
 	notesDir       string
 	width          int
@@ -20,10 +21,12 @@ type AppModel struct {
 // NewAppModel creates a new app model with dashboard as initial view
 func NewAppModel(journalDir, notesDir string) AppModel {
 	journalService := services.NewJournalService(journalDir)
+	notesService := services.NewNotesService(notesDir)
 
 	return AppModel{
 		currentView:    NewDashboard(),
 		journalService: journalService,
+		notesService:   notesService,
 		journalDir:     journalDir,
 		notesDir:       notesDir,
 	}
@@ -32,10 +35,26 @@ func NewAppModel(journalDir, notesDir string) AppModel {
 // NewJournalBrowserApp creates a new app model starting at the journal browser
 func NewJournalBrowserApp(journalDir, notesDir string) AppModel {
 	journalService := services.NewJournalService(journalDir)
+	notesService := services.NewNotesService(notesDir)
 
 	return AppModel{
-		currentView:    NewJournalBrowser(journalService, journalDir),
+		currentView:    NewJournalBrowser(journalService, journalDir, 0, 0),
 		journalService: journalService,
+		notesService:   notesService,
+		journalDir:     journalDir,
+		notesDir:       notesDir,
+	}
+}
+
+// NewNotesBrowserApp creates a new app model starting at the notes browser
+func NewNotesBrowserApp(journalDir, notesDir string) AppModel {
+	journalService := services.NewJournalService(journalDir)
+	notesService := services.NewNotesService(notesDir)
+
+	return AppModel{
+		currentView:    NewNotesBrowser(notesService, 0, 0),
+		journalService: journalService,
+		notesService:   notesService,
 		journalDir:     journalDir,
 		notesDir:       notesDir,
 	}
@@ -68,19 +87,56 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmd, m.currentView.Init())
 		case "journals":
 			// Open journal browser
-			m.currentView = NewJournalBrowser(m.journalService, m.journalDir)
-			// Send window size to new view
-			if m.width > 0 && m.height > 0 {
-				m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
-			}
-			return m, tea.Batch(cmd, m.currentView.Init())
+			m.currentView = NewJournalBrowser(m.journalService, m.journalDir, m.width, m.height)
+			return m, m.currentView.Init()
 		case "notes":
-			// TODO: Implement notes browser
-			return m, nil
+			// Open notes browser
+			m.currentView = NewNotesBrowser(m.notesService, m.width, m.height)
+			return m, m.currentView.Init()
 		}
 	case OpenJournalMsg:
 		// Open specific journal date in editor
 		m.currentView = NewJournalEditor(m.journalService, msg.date)
+		// Send window size to new view
+		if m.width > 0 && m.height > 0 {
+			m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		}
+		return m, tea.Batch(cmd, m.currentView.Init())
+	case OpenNoteMsg:
+		// Open specific note in editor
+		m.currentView = NewNotesEditor(m.notesService, msg.filePath)
+		// Send window size to new view
+		if m.width > 0 && m.height > 0 {
+			m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		}
+		return m, tea.Batch(cmd, m.currentView.Init())
+	case CreateNoteMsg:
+		// Create new note
+		m.currentView = NewNotesEditorForNew(m.notesService)
+		// Send window size to new view
+		if m.width > 0 && m.height > 0 {
+			m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		}
+		return m, tea.Batch(cmd, m.currentView.Init())
+	case CreateNoteFromTemplateMsg:
+		// Create new note from template
+		m.currentView = NewNotesEditorForNewWithTemplate(m.notesService, msg.templatePath)
+		// Send window size to new view
+		if m.width > 0 && m.height > 0 {
+			m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		}
+		return m, tea.Batch(cmd, m.currentView.Init())
+	case BackToNotesBrowserMsg:
+		// Return to notes browser
+		m.currentView = NewNotesBrowser(m.notesService, m.width, m.height)
+		return m, m.currentView.Init()
+	case BackToJournalBrowserMsg:
+		// Return to journal browser
+		m.currentView = NewJournalBrowser(m.journalService, m.journalDir, m.width, m.height)
+		return m, m.currentView.Init()
+	case BackToDashboardMsg:
+		// Return to dashboard
+		m.currentView = NewDashboard()
 		// Send window size to new view
 		if m.width > 0 && m.height > 0 {
 			m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})

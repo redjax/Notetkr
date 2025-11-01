@@ -45,6 +45,7 @@ func init() {
 
 	// Add subcommands - they will get config when executed
 	rootCmd.AddCommand(commands.NewJournalCmd(func() *config.Config { return cfg }))
+	rootCmd.AddCommand(commands.NewNotesCmd(func() *config.Config { return cfg }))
 
 	// Handle persistent flags
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
