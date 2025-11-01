@@ -26,3 +26,5 @@ go.work.sum
 .DS_Store
 Thumbs.db
 
+# Vulnerability reports
+vulnerability-reports/
