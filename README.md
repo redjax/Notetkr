@@ -1,6 +1,56 @@
-# Notetkr
+# Notetkr <!-- omit in toc -->
+
+<!-- Badges/shields -->
+<p align="center">
+  <img alt="GitHub Created At" src="https://img.shields.io/github/created-at/redjax/Notetkr">
+  <img alt="GitHub Last Commit" src="https://img.shields.io/github/last-commit/redjax/Notetkr">
+  <img alt="GitHub Commits this Year" src="https://img.shields.io/github/commit-activity/y/redjax/Notetkr">
+  <img alt="Github Repo Size" src="https://img.shields.io/github/repo-size/redjax/Notetkr">
+</p>
 
 `notetkr` is a terminal-based note taking/journaling app.
+
+## Table of Contents <!-- omit in toc -->
+
+- [Install](#install)
+  - [Install script](#install-script)
+  - [From Release](#from-release)
+- [Usage](#usage)
+- [Purpose](#purpose)
+
+## Install
+
+### Install script
+
+You can download & install Notetkr on Linux & Mac using [the `install-notetkr.sh` script](./scripts/install-notetkr.sh).
+
+To download & install in 1 command, do:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/redjax/Notetkr/refs/heads/main/scripts/install-notetkr.sh | bash -s -- --auto
+```
+
+For Windows, use:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/redjax/Notetkr/refs/heads/main/scripts/install-notetkr.ps1))) -Auto
+```
+
+### From Release
+
+Install a release from the [releases page](https://github.com/redjax/Notetkr/releases/latest).
+
+## Usage
+
+Start the terminal UI (TUI) with `nt`. See the usage menu with `nt --help`. You can also open journals or notes directly with:
+
+```shell
+## Open straight to journals UI
+nt journal
+
+## Open straight to notes UI
+nt notes
+```
 
 ## Purpose
 
