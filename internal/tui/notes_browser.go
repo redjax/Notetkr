@@ -20,24 +20,24 @@ const (
 )
 
 type NotesBrowserModel struct {
-	notesService    *services.NotesService
-	notes           []services.Note
-	filteredNotes   []services.Note
-	allTags         []string
-	templates       []services.Note
-	cursor          int
-	width           int
-	height          int
-	err             error
-	searchInput     textinput.Model
-	filterMode      FilterMode
-	showingTags     bool
+	notesService     *services.NotesService
+	notes            []services.Note
+	filteredNotes    []services.Note
+	allTags          []string
+	templates        []services.Note
+	cursor           int
+	width            int
+	height           int
+	err              error
+	searchInput      textinput.Model
+	filterMode       FilterMode
+	showingTags      bool
 	showingTemplates bool
-	tagCursor       int
-	templateCursor  int
-	confirmDelete   bool
-	deleteTarget    string
-	deleteTargetIdx int
+	tagCursor        int
+	templateCursor   int
+	confirmDelete    bool
+	deleteTarget     string
+	deleteTargetIdx  int
 }
 
 var (
@@ -74,13 +74,13 @@ func NewNotesBrowser(notesService *services.NotesService, width, height int) Not
 	searchInput.CharLimit = 100
 
 	m := NotesBrowserModel{
-		notesService: notesService,
-		searchInput:  searchInput,
-		filterMode:   FilterNone,
-		showingTags:  false,
+		notesService:     notesService,
+		searchInput:      searchInput,
+		filterMode:       FilterNone,
+		showingTags:      false,
 		showingTemplates: false,
-		width:        width,
-		height:       height,
+		width:            width,
+		height:           height,
 	}
 
 	// Initialize default templates

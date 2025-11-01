@@ -213,21 +213,21 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
-			// Switch to normal editor mode
-			m.isNewNote = false
-			m.filePath = filePath
-			m.noteName = noteName
-			m.mode = ModeNormal
-			// Use actual window height if available, otherwise default
-			if m.height > 0 {
-				m.textarea.SetHeight(m.height - 7)
-			} else {
-				m.textarea.SetHeight(20)
-			}
-			m.textarea.CharLimit = 0
-			m.textarea.Placeholder = "Press 'i' to enter insert mode and start writing..."
+				// Switch to normal editor mode
+				m.isNewNote = false
+				m.filePath = filePath
+				m.noteName = noteName
+				m.mode = ModeNormal
+				// Use actual window height if available, otherwise default
+				if m.height > 0 {
+					m.textarea.SetHeight(m.height - 7)
+				} else {
+					m.textarea.SetHeight(20)
+				}
+				m.textarea.CharLimit = 0
+				m.textarea.Placeholder = "Press 'i' to enter insert mode and start writing..."
 
-			return m, m.loadNote
+				return m, m.loadNote
 
 			default:
 				m.textarea, cmd = m.textarea.Update(msg)

@@ -29,8 +29,8 @@ type Attendee struct {
 }
 
 type NotesService struct {
-	notesDir      string
-	templatesDir  string
+	notesDir     string
+	templatesDir string
 }
 
 func NewNotesService(notesDir string) *NotesService {
@@ -58,12 +58,12 @@ func (s *NotesService) ListNotes() ([]Note, error) {
 		// Only include .md files
 		if !info.IsDir() && strings.HasSuffix(info.Name(), ".md") {
 			relPath, _ := filepath.Rel(s.notesDir, path)
-			
+
 			// Extract metadata from file
 			tags, _ := s.extractTags(path)
 			keywords, _ := s.extractKeywords(path)
 			attendees, _ := s.extractAttendees(path)
-			
+
 			notes = append(notes, Note{
 				Name:       relPath,
 				FilePath:   path,
@@ -97,7 +97,7 @@ func (s *NotesService) ListTemplates() ([]Note, error) {
 		// Only include .md files
 		if !info.IsDir() && strings.HasSuffix(info.Name(), ".md") {
 			relPath, _ := filepath.Rel(s.templatesDir, path)
-			
+
 			templates = append(templates, Note{
 				Name:       relPath,
 				FilePath:   path,
@@ -130,7 +130,7 @@ func (s *NotesService) extractTags(filePath string) ([]string, error) {
 	// Extract frontmatter and body separately
 	var frontmatterText string
 	var bodyText string
-	
+
 	// Check for frontmatter with --- delimiters
 	fmBlockRe := regexp.MustCompile(`(?s)^---\s*\n(.*?)\n---\s*\n?(.*)`)
 	if fmBlock := fmBlockRe.FindStringSubmatch(text); len(fmBlock) > 2 {
@@ -179,11 +179,14 @@ func (s *NotesService) extractTags(filePath string) ([]string, error) {
 
 // extractKeywords reads a note file and extracts keywords from frontmatter
 // Supports both YAML frontmatter with --- delimiters and inline format:
-//   ---
-//   keywords: keyword1, keyword2, keyword3
-//   ---
+//
+//	---
+//	keywords: keyword1, keyword2, keyword3
+//	---
+//
 // Or:
-//   keywords: keyword1, keyword2, keyword3
+//
+//	keywords: keyword1, keyword2, keyword3
 func (s *NotesService) extractKeywords(filePath string) ([]string, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
@@ -195,7 +198,7 @@ func (s *NotesService) extractKeywords(filePath string) ([]string, error) {
 
 	// Extract frontmatter block if it exists
 	var frontmatterText string
-	
+
 	// Check for frontmatter with --- delimiters
 	fmBlockRe := regexp.MustCompile(`(?s)^---\s*\n(.*?)\n---`)
 	if fmBlock := fmBlockRe.FindStringSubmatch(text); len(fmBlock) > 1 {
@@ -227,10 +230,11 @@ func (s *NotesService) extractKeywords(filePath string) ([]string, error) {
 // extractAttendees reads a note file and extracts attendees from YAML frontmatter
 // Supports nested YAML structure:
 // attendees:
-//   david correll:
-//   jack kenyon:
-//     company: embrace pet insurance
-//     email: jkenyon@example.com
+//
+//	david correll:
+//	jack kenyon:
+//	  company: embrace pet insurance
+//	  email: jkenyon@example.com
 func (s *NotesService) extractAttendees(filePath string) ([]Attendee, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
@@ -242,7 +246,7 @@ func (s *NotesService) extractAttendees(filePath string) ([]Attendee, error) {
 
 	// Extract frontmatter block if it exists
 	var frontmatterText string
-	
+
 	// Check for frontmatter with --- delimiters
 	fmBlockRe := regexp.MustCompile(`(?s)^---\s*\n(.*?)\n---`)
 	if fmBlock := fmBlockRe.FindStringSubmatch(text); len(fmBlock) > 1 {
@@ -305,7 +309,7 @@ func (s *NotesService) extractAttendees(filePath string) ([]Attendee, error) {
 				if len(parts) == 2 {
 					key := strings.TrimSpace(parts[0])
 					value := strings.TrimSpace(parts[1])
-					
+
 					switch strings.ToLower(key) {
 					case "company":
 						currentAttendee.Company = value
