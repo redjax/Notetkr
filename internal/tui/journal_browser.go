@@ -56,12 +56,14 @@ var (
 				Foreground(lipgloss.Color("196"))
 )
 
-func NewJournalBrowser(journalService *services.JournalService, journalDir string) JournalBrowserModel {
+func NewJournalBrowser(journalService *services.JournalService, journalDir string, width, height int) JournalBrowserModel {
 	m := JournalBrowserModel{
 		journalService: journalService,
 		journalDir:     journalDir,
 		breadcrumb:     []string{},
 		cursor:         0,
+		width:          width,
+		height:         height,
 	}
 	m.loadItems()
 	return m
@@ -164,7 +166,9 @@ func (m JournalBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loadItems()
 			} else {
 				// Return to dashboard
-				return NewDashboard(), nil
+				return m, func() tea.Msg {
+					return BackToDashboardMsg{}
+				}
 			}
 
 		case "up", "k":
@@ -305,3 +309,5 @@ func (m JournalBrowserModel) View() string {
 type OpenJournalMsg struct {
 	date time.Time
 }
+
+type BackToJournalBrowserMsg struct{}
