@@ -2,11 +2,6 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       version:
@@ -34,46 +29,10 @@ jobs:
       - name: Check for releasable commits
         id: check
         run: |
-          # Check if this is a tag push
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            echo "should_release=true" >> $GITHUB_OUTPUT
-            echo "is_manual=true" >> $GITHUB_OUTPUT
-            echo "Tag push detected - will release"
-            exit 0
-          fi
-          
-          # Check if manual trigger
-          if [[ -n "${{ github.event.inputs.version }}" ]]; then
-            echo "should_release=true" >> $GITHUB_OUTPUT
-            echo "is_manual=true" >> $GITHUB_OUTPUT
-            echo "Manual trigger - will release"
-            exit 0
-          fi
-          
-          ## For push to main, check all commits since last tag
-          CURRENT=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          
-          if [[ -z "$CURRENT" ]]; then
-            echo "No existing tags found, checking all commits"
-            COMMITS=$(git log --pretty=format:"%s")
-          else
-            echo "Last tag: $CURRENT"
-            COMMITS=$(git log ${CURRENT}..HEAD --pretty=format:"%s")
-          fi
-          
-          echo "Commits to check:"
-          echo "$COMMITS"
-          
-          ## Check if any commit is feat: or fix:
-          if echo "$COMMITS" | grep -qE "^(feat|fix)(\(.+\))?:"; then
-            echo "should_release=true" >> $GITHUB_OUTPUT
-            echo "is_manual=false" >> $GITHUB_OUTPUT
-            echo "Found releasable commit (feat/fix) - will release"
-          else
-            echo "should_release=false" >> $GITHUB_OUTPUT
-            echo "is_manual=false" >> $GITHUB_OUTPUT
-            echo "No releasable commit found - skipping release workflow"
-          fi
+          # Manual trigger - always release
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "is_manual=true" >> $GITHUB_OUTPUT
+          echo "Manual trigger - will release"
 
   release:
     name: Create release
@@ -102,14 +61,8 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          ## Check if this is a tag push
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION="${{ github.ref_name }}"
-            echo "Tag push detected: $VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-
           ## Check if manual version was provided
-          elif [[ -n "${{ github.event.inputs.version }}" ]]; then
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
             VERSION="${{ github.event.inputs.version }}"
             echo "Manual version specified: $VERSION"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
