@@ -153,10 +153,10 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle mode-specific keys
 		if m.mode == ModeNormal {
 			switch msg.String() {
-			case "ctrl+c", "q":
+			case "ctrl+c":
 				return m, tea.Quit
 
-			case "esc":
+			case "q":
 				// Return to journal browser
 				return m, func() tea.Msg {
 					return BackToJournalBrowserMsg{}
@@ -296,7 +296,7 @@ func (m JournalEditorModel) View() string {
 	// Help - different based on mode
 	var help string
 	if m.mode == ModeNormal {
-		help = "hjkl: move • i/a: insert • 0/$: line start/end • g/G: top/bottom • ctrl+s: save • esc: back • q: quit"
+		help = "hjkl: move • i/a: insert • 0/$: line start/end • g/G: top/bottom • ctrl+s: save • q: back"
 	} else {
 		help = "esc: normal mode • ctrl+s: save • ctrl+c: quit"
 	}

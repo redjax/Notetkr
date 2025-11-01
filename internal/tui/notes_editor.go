@@ -239,11 +239,6 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.mode == ModeNormal {
 			switch msg.String() {
 			case "q":
-				return m, func() tea.Msg {
-					return BackToDashboardMsg{}
-				}
-
-			case "esc":
 				// Go back to notes browser
 				return m, func() tea.Msg {
 					return BackToNotesBrowserMsg{}
@@ -376,7 +371,7 @@ func (m NotesEditorModel) View() string {
 
 		var help string
 		if m.mode == ModeNormal {
-			help = "hjkl: move • i/a: insert • 0/$: line start/end • g/G: top/bottom • ctrl+s: save • esc: back to browser • q: quit"
+			help = "hjkl: move • i/a: insert • 0/$: line start/end • g/G: top/bottom • ctrl+s: save • q: back to browser"
 		} else {
 			help = "esc: normal mode • ctrl+s: save • ctrl+c: quit"
 		}
