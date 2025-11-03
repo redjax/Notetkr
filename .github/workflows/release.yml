@@ -34,9 +34,29 @@ jobs:
           echo "is_manual=true" >> $GITHUB_OUTPUT
           echo "Manual trigger - will release"
 
+  security-scan:
+    name: Run security scans
+    needs: check-commits
+    if: needs.check-commits.outputs.should_release == 'true'
+    uses: ./.github/workflows/secrets-scan.yml
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+  vulnerability-scan:
+    name: Run vulnerability scan
+    needs: check-commits
+    if: needs.check-commits.outputs.should_release == 'true'
+    uses: ./.github/workflows/osv-scan.yml
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
   release:
     name: Create release
-    needs: check-commits
+    needs: [check-commits, security-scan, vulnerability-scan]
     if: needs.check-commits.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
