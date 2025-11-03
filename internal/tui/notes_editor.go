@@ -24,6 +24,9 @@ type NotesEditorModel struct {
 	err          error
 	isNewNote    bool
 	noteName     string
+	undoStack    []string
+	redoStack    []string
+	lastContent  string
 }
 
 var (
@@ -64,6 +67,9 @@ func NewNotesEditor(notesService *services.NotesService, filePath string) NotesE
 		mode:         ModeNormal,
 		saved:        false,
 		isNewNote:    false,
+		undoStack:    []string{},
+		redoStack:    []string{},
+		lastContent:  "",
 	}
 
 	return m
@@ -85,6 +91,9 @@ func NewNotesEditorForNew(notesService *services.NotesService) NotesEditorModel 
 		mode:         ModeInsert, // Start in insert mode for name
 		saved:        false,
 		isNewNote:    true,
+		undoStack:    []string{},
+		redoStack:    []string{},
+		lastContent:  "",
 	}
 
 	return m
@@ -107,6 +116,9 @@ func NewNotesEditorForNewWithTemplate(notesService *services.NotesService, templ
 		mode:         ModeInsert, // Start in insert mode for name
 		saved:        false,
 		isNewNote:    true,
+		undoStack:    []string{},
+		redoStack:    []string{},
+		lastContent:  "",
 	}
 
 	return m
@@ -165,6 +177,8 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textarea.SetValue(msg.content)
 		// Reset cursor to start of document
 		m.textarea.CursorStart()
+		// Initialize undo stack with the loaded content
+		m.lastContent = msg.content
 		return m, nil
 
 	case NotesEditorErrorMsg:
@@ -247,6 +261,16 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "ctrl+s":
 				return m, m.saveNote
 
+			case "ctrl+z":
+				// Undo
+				m.undo()
+				return m, nil
+
+			case "ctrl+y":
+				// Redo
+				m.redo()
+				return m, nil
+
 			case "i":
 				m.mode = ModeInsert
 				m.textarea.Focus()
@@ -302,6 +326,11 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "G":
 				m.textarea, cmd = m.textarea.Update(tea.KeyMsg{Type: tea.KeyCtrlEnd})
 				return m, cmd
+
+			case "d":
+				// Delete current line (like dd in vim)
+				m.deleteLine()
+				return m, nil
 			}
 			return m, nil
 		} else {
@@ -314,6 +343,16 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "ctrl+s":
 				return m, m.saveNote
 
+			case "ctrl+z":
+				// Undo
+				m.undo()
+				return m, nil
+
+			case "ctrl+y":
+				// Redo
+				m.redo()
+				return m, nil
+
 			default:
 				m.textarea, cmd = m.textarea.Update(msg)
 				return m, cmd
@@ -322,7 +361,89 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	m.textarea, cmd = m.textarea.Update(msg)
+
+	// Track content changes for undo/redo
+	m.trackContentChange()
+
 	return m, cmd
+}
+
+// trackContentChange saves the current content to undo stack if it changed
+func (m *NotesEditorModel) trackContentChange() {
+	currentContent := m.textarea.Value()
+	if currentContent != m.lastContent {
+		// Save previous content to undo stack
+		m.undoStack = append(m.undoStack, m.lastContent)
+		// Limit undo stack size to 100 entries
+		if len(m.undoStack) > 100 {
+			m.undoStack = m.undoStack[1:]
+		}
+		m.lastContent = currentContent
+		// Clear redo stack on new change
+		m.redoStack = []string{}
+	}
+}
+
+// undo restores the previous content
+func (m *NotesEditorModel) undo() {
+	if len(m.undoStack) == 0 {
+		return
+	}
+
+	// Save current content to redo stack
+	m.redoStack = append(m.redoStack, m.lastContent)
+
+	// Pop from undo stack
+	previousContent := m.undoStack[len(m.undoStack)-1]
+	m.undoStack = m.undoStack[:len(m.undoStack)-1]
+
+	// Restore content
+	m.textarea.SetValue(previousContent)
+	m.lastContent = previousContent
+}
+
+// redo restores content that was undone
+func (m *NotesEditorModel) redo() {
+	if len(m.redoStack) == 0 {
+		return
+	}
+
+	// Save current content to undo stack
+	m.undoStack = append(m.undoStack, m.lastContent)
+
+	// Pop from redo stack
+	nextContent := m.redoStack[len(m.redoStack)-1]
+	m.redoStack = m.redoStack[:len(m.redoStack)-1]
+
+	// Restore content
+	m.textarea.SetValue(nextContent)
+	m.lastContent = nextContent
+}
+
+// deleteLine deletes the current line where the cursor is positioned
+func (m *NotesEditorModel) deleteLine() {
+	content := m.textarea.Value()
+	if content == "" {
+		return
+	}
+
+	// Save current state before deletion
+	m.trackContentChange()
+
+	// Move to start of line
+	m.textarea.Update(tea.KeyMsg{Type: tea.KeyHome})
+
+	// Delete from cursor to end of line (Ctrl+K)
+	m.textarea.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+
+	// Delete the newline character if not on last line
+	currentContent := m.textarea.Value()
+	if currentContent != "" && m.textarea.Line() < len(strings.Split(currentContent, "\n"))-1 {
+		m.textarea.Update(tea.KeyMsg{Type: tea.KeyDelete})
+	}
+
+	// Track the change after deletion
+	m.trackContentChange()
 }
 
 func (m NotesEditorModel) View() string {
@@ -370,9 +491,9 @@ func (m NotesEditorModel) View() string {
 
 		var help string
 		if m.mode == ModeNormal {
-			help = "hjkl: move • i/a: insert • 0/$: line start/end • g/G: top/bottom • ctrl+s: save • q: back to browser"
+			help = "hjkl: move • i/a: insert • d: delete line • 0/$: line start/end • g/G: top/bottom • ctrl+s: save • q: back to browser"
 		} else {
-			help = "esc: normal mode • ctrl+s: save • ctrl+c: quit"
+			help = "esc: normal mode • ctrl+z/y: undo/redo • ctrl+s: save • ctrl+c: quit"
 		}
 		b.WriteString(notesHelpStyle.Render(help))
 	}
