@@ -11,6 +11,12 @@ import (
 	"github.com/redjax/notetkr/internal/services"
 )
 
+type undoState struct {
+	content string
+	line    int
+	column  int
+}
+
 type NotesEditorModel struct {
 	notesService *services.NotesService
 	filePath     string
@@ -24,8 +30,8 @@ type NotesEditorModel struct {
 	err          error
 	isNewNote    bool
 	noteName     string
-	undoStack    []string
-	redoStack    []string
+	undoStack    []undoState
+	redoStack    []undoState
 	lastContent  string
 }
 
@@ -67,8 +73,8 @@ func NewNotesEditor(notesService *services.NotesService, filePath string) NotesE
 		mode:         ModeNormal,
 		saved:        false,
 		isNewNote:    false,
-		undoStack:    []string{},
-		redoStack:    []string{},
+		undoStack:    []undoState{},
+		redoStack:    []undoState{},
 		lastContent:  "",
 	}
 
@@ -91,8 +97,8 @@ func NewNotesEditorForNew(notesService *services.NotesService) NotesEditorModel 
 		mode:         ModeInsert, // Start in insert mode for name
 		saved:        false,
 		isNewNote:    true,
-		undoStack:    []string{},
-		redoStack:    []string{},
+		undoStack:    []undoState{},
+		redoStack:    []undoState{},
 		lastContent:  "",
 	}
 
@@ -116,8 +122,8 @@ func NewNotesEditorForNewWithTemplate(notesService *services.NotesService, templ
 		mode:         ModeInsert, // Start in insert mode for name
 		saved:        false,
 		isNewNote:    true,
-		undoStack:    []string{},
-		redoStack:    []string{},
+		undoStack:    []undoState{},
+		redoStack:    []undoState{},
 		lastContent:  "",
 	}
 
@@ -372,15 +378,23 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *NotesEditorModel) trackContentChange() {
 	currentContent := m.textarea.Value()
 	if currentContent != m.lastContent {
-		// Save previous content to undo stack
-		m.undoStack = append(m.undoStack, m.lastContent)
+		// Get current cursor position
+		lineInfo := m.textarea.LineInfo()
+		currentLine := m.textarea.Line()
+
+		// Save previous content and cursor position to undo stack
+		m.undoStack = append(m.undoStack, undoState{
+			content: m.lastContent,
+			line:    currentLine,
+			column:  lineInfo.ColumnOffset,
+		})
 		// Limit undo stack size to 100 entries
 		if len(m.undoStack) > 100 {
 			m.undoStack = m.undoStack[1:]
 		}
 		m.lastContent = currentContent
 		// Clear redo stack on new change
-		m.redoStack = []string{}
+		m.redoStack = []undoState{}
 	}
 }
 
@@ -390,16 +404,39 @@ func (m *NotesEditorModel) undo() {
 		return
 	}
 
-	// Save current content to redo stack
-	m.redoStack = append(m.redoStack, m.lastContent)
+	// Get current cursor position
+	lineInfo := m.textarea.LineInfo()
+	currentLine := m.textarea.Line()
+
+	// Save current content and cursor to redo stack
+	m.redoStack = append(m.redoStack, undoState{
+		content: m.lastContent,
+		line:    currentLine,
+		column:  lineInfo.ColumnOffset,
+	})
 
 	// Pop from undo stack
-	previousContent := m.undoStack[len(m.undoStack)-1]
+	previousState := m.undoStack[len(m.undoStack)-1]
 	m.undoStack = m.undoStack[:len(m.undoStack)-1]
 
 	// Restore content
-	m.textarea.SetValue(previousContent)
-	m.lastContent = previousContent
+	m.textarea.SetValue(previousState.content)
+	m.lastContent = previousState.content
+
+	// Restore cursor position
+	// First, move to the correct line
+	targetLine := previousState.line
+	currentLine = m.textarea.Line()
+	for currentLine < targetLine && currentLine < m.textarea.LineCount()-1 {
+		m.textarea.CursorDown()
+		currentLine++
+	}
+	for currentLine > targetLine && currentLine > 0 {
+		m.textarea.CursorUp()
+		currentLine--
+	}
+	// Then set the column position
+	m.textarea.SetCursor(previousState.column)
 }
 
 // redo restores content that was undone
@@ -408,16 +445,39 @@ func (m *NotesEditorModel) redo() {
 		return
 	}
 
-	// Save current content to undo stack
-	m.undoStack = append(m.undoStack, m.lastContent)
+	// Get current cursor position
+	lineInfo := m.textarea.LineInfo()
+	currentLine := m.textarea.Line()
+
+	// Save current content and cursor to undo stack
+	m.undoStack = append(m.undoStack, undoState{
+		content: m.lastContent,
+		line:    currentLine,
+		column:  lineInfo.ColumnOffset,
+	})
 
 	// Pop from redo stack
-	nextContent := m.redoStack[len(m.redoStack)-1]
+	nextState := m.redoStack[len(m.redoStack)-1]
 	m.redoStack = m.redoStack[:len(m.redoStack)-1]
 
 	// Restore content
-	m.textarea.SetValue(nextContent)
-	m.lastContent = nextContent
+	m.textarea.SetValue(nextState.content)
+	m.lastContent = nextState.content
+
+	// Restore cursor position
+	// First, move to the correct line
+	targetLine := nextState.line
+	currentLine = m.textarea.Line()
+	for currentLine < targetLine && currentLine < m.textarea.LineCount()-1 {
+		m.textarea.CursorDown()
+		currentLine++
+	}
+	for currentLine > targetLine && currentLine > 0 {
+		m.textarea.CursorUp()
+		currentLine--
+	}
+	// Then set the column position
+	m.textarea.SetCursor(nextState.column)
 }
 
 // deleteLine deletes the current line where the cursor is positioned
