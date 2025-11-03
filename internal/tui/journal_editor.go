@@ -182,6 +182,15 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textarea, cmd = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRight})
 				return m, cmd
 
+			case "o":
+				// Insert new line below cursor and enter insert mode (like vim)
+				m.mode = ModeInsert
+				// Move to end of current line, then insert newline
+				m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnd})
+				m.textarea, cmd = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				m.trackContentChange()
+				return m, cmd
+
 			case "ctrl+s":
 				// Save journal (works in both modes)
 				m.saved = false
@@ -412,16 +421,39 @@ func (m *JournalEditorModel) deleteLine() {
 	// Save current state before deletion
 	m.trackContentChange()
 
-	// Move to start of line
-	m.textarea.Update(tea.KeyMsg{Type: tea.KeyHome})
+	lines := strings.Split(content, "\n")
+	lineInfo := m.textarea.Line()
+	currentLine := lineInfo
 
-	// Delete from cursor to end of line (Ctrl+K)
-	m.textarea.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+	// Check bounds
+	if currentLine >= len(lines) {
+		return
+	}
 
-	// Delete the newline character if not on last line
-	currentContent := m.textarea.Value()
-	if currentContent != "" && m.textarea.Line() < len(strings.Split(currentContent, "\n"))-1 {
-		m.textarea.Update(tea.KeyMsg{Type: tea.KeyDelete})
+	// Remove the current line
+	newLines := append(lines[:currentLine], lines[currentLine+1:]...)
+	newContent := strings.Join(newLines, "\n")
+
+	// If we deleted the last line and there's content remaining, ensure proper ending
+	if currentLine >= len(newLines) && len(newLines) > 0 {
+		currentLine = len(newLines) - 1
+	}
+
+	// Update content
+	m.textarea.SetValue(newContent)
+
+	// Position cursor at the beginning of the same line number (or last line if we deleted the last line)
+	// We need to count newlines to position correctly
+	if currentLine > 0 {
+		targetPos := 0
+		for i := 0; i < currentLine; i++ {
+			if i < len(newLines) {
+				targetPos += len(newLines[i]) + 1 // +1 for newline
+			}
+		}
+		m.textarea.SetCursor(targetPos)
+	} else {
+		m.textarea.SetCursor(0)
 	}
 
 	// Track the change after deletion
