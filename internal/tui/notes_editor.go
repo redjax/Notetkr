@@ -309,7 +309,6 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "esc":
 				m.mode = ModeNormal
-				m.textarea.Blur()
 				return m, nil
 
 			case "ctrl+s":
