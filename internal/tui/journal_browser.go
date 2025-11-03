@@ -217,6 +217,12 @@ func (m JournalBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.deleteTargetPath = targetPath
 			}
 
+		case "g":
+			// Open weekly summary menu
+			return m, func() tea.Msg {
+				return OpenWeeklySummaryMenuMsg{}
+			}
+
 		case "enter", "l", "right", " ":
 			if len(m.items) == 0 {
 				return m, nil
@@ -242,6 +248,22 @@ func (m JournalBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if strings.HasPrefix(selected, "📄") {
 				// Parse date from filename (YYYY-MM-DD)
 				fileName := strings.TrimPrefix(selected, "📄 ")
+
+				// Check if it's a weekly summary file (week-YYYY-MM-DD)
+				if strings.HasPrefix(fileName, "week-") {
+					// Open weekly summary in editor
+					currentPath := m.journalDir
+					for _, part := range m.breadcrumb {
+						currentPath = filepath.Join(currentPath, part)
+					}
+					filePath := filepath.Join(currentPath, fileName+".md")
+
+					return m, func() tea.Msg {
+						return OpenWeeklySummaryFileMsg{filePath: filePath}
+					}
+				}
+
+				// Regular journal file - try to parse date
 				date, err := time.Parse("2006-01-02", fileName)
 				if err == nil {
 					return m, func() tea.Msg {
@@ -293,7 +315,7 @@ func (m JournalBrowserModel) View() string {
 		}
 	}
 
-	s += "\n" + helpStyle.Render("↑/k: up • ↓/j: down • enter/l: open • esc/h: back • d: delete • q: quit")
+	s += "\n" + helpStyle.Render("↑/k: up • ↓/j: down • enter/l: open • esc/h: back • g: weekly summary • d: delete • q: quit")
 
 	// Fill the screen
 	if m.width > 0 && m.height > 0 {
@@ -311,3 +333,9 @@ type OpenJournalMsg struct {
 }
 
 type BackToJournalBrowserMsg struct{}
+
+type OpenWeeklySummaryMenuMsg struct{}
+
+type OpenWeeklySummaryFileMsg struct {
+	filePath string
+}
