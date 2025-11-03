@@ -60,6 +60,20 @@ func NewNotesBrowserApp(journalDir, notesDir string) AppModel {
 	}
 }
 
+// NewSearchBrowserApp creates a new app model starting at the search browser
+func NewSearchBrowserApp(journalDir, notesDir string, query string) AppModel {
+	journalService := services.NewJournalService(journalDir)
+	notesService := services.NewNotesService(notesDir)
+
+	return AppModel{
+		currentView:    NewSearchBrowserWithQuery(journalService, notesService, 0, 0, query),
+		journalService: journalService,
+		notesService:   notesService,
+		journalDir:     journalDir,
+		notesDir:       notesDir,
+	}
+}
+
 func (m AppModel) Init() tea.Cmd {
 	return m.currentView.Init()
 }

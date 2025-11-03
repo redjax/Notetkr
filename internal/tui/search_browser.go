@@ -84,7 +84,38 @@ func NewSearchBrowser(journalService *services.JournalService, notesService *ser
 	}
 }
 
+// NewSearchBrowserWithQuery creates a new search browser with an initial query
+func NewSearchBrowserWithQuery(journalService *services.JournalService, notesService *services.NotesService, width, height int, query string) SearchBrowserModel {
+	searchInput := textinput.New()
+	searchInput.Placeholder = "Search notes and journals..."
+	searchInput.CharLimit = 100
+	searchInput.SetValue(query)
+
+	// If query is provided, blur the input so user can navigate results immediately
+	if query != "" {
+		searchInput.Blur()
+	} else {
+		searchInput.Focus()
+	}
+
+	m := SearchBrowserModel{
+		journalService: journalService,
+		notesService:   notesService,
+		searchInput:    searchInput,
+		width:          width,
+		height:         height,
+		searching:      query != "",
+		hasSearched:    false,
+	}
+
+	return m
+}
+
 func (m SearchBrowserModel) Init() tea.Cmd {
+	// If we have a query, perform search immediately
+	if m.searchInput.Value() != "" && m.searching {
+		return m.performSearch
+	}
 	return textinput.Blink
 }
 
