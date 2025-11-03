@@ -15,12 +15,14 @@ import (
 // NewImportCmd creates the import command
 func NewImportCmd(getConfig func() *config.Config) *cobra.Command {
 	var filePath string
+	var importTypes []string
 
 	cmd := &cobra.Command{
 		Use:   "import",
 		Short: "Import notes and journals from a ZIP archive",
 		Long: `Import notes and journals from a ZIP archive created by the export command.
-Merges with existing data, keeping the newer version of any duplicate files.`,
+Merges with existing data, keeping the newer version of any duplicate files.
+Use -t/--import-type to specify what to import (notes, journals, or both).`,
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := getConfig()
 			if filePath == "" {
@@ -28,7 +30,7 @@ Merges with existing data, keeping the newer version of any duplicate files.`,
 				cmd.Usage()
 				os.Exit(1)
 			}
-			if err := runImport(cfg, filePath); err != nil {
+			if err := runImport(cfg, filePath, importTypes); err != nil {
 				fmt.Fprintf(os.Stderr, "Error importing data: %v\n", err)
 				os.Exit(1)
 			}
@@ -36,12 +38,33 @@ Merges with existing data, keeping the newer version of any duplicate files.`,
 	}
 
 	cmd.Flags().StringVarP(&filePath, "file", "f", "", "Path to the ZIP file to import (required)")
+	cmd.Flags().StringSliceVarP(&importTypes, "import-type", "t", []string{}, "What to import: notes, journals (default: both)")
 	cmd.MarkFlagRequired("file")
 
 	return cmd
 }
 
-func runImport(cfg *config.Config, zipPath string) error {
+func runImport(cfg *config.Config, zipPath string, importTypes []string) error {
+	// Determine what to import
+	importNotes := true
+	importJournals := true
+
+	if len(importTypes) > 0 {
+		importNotes = false
+		importJournals = false
+
+		for _, t := range importTypes {
+			switch strings.ToLower(t) {
+			case "notes":
+				importNotes = true
+			case "journals":
+				importJournals = true
+			default:
+				return fmt.Errorf("invalid import type: %s (valid options: notes, journals)", t)
+			}
+		}
+	}
+
 	// Open ZIP file
 	reader, err := zip.OpenReader(zipPath)
 	if err != nil {
@@ -65,10 +88,18 @@ func runImport(cfg *config.Config, zipPath string) error {
 		zipPath := filepath.ToSlash(file.Name)
 
 		if strings.HasPrefix(zipPath, "notes/") {
+			// Skip if not importing notes
+			if !importNotes {
+				continue
+			}
 			// Extract to notes directory
 			relPath := strings.TrimPrefix(zipPath, "notes/")
 			destPath = filepath.Join(cfg.NotesDir, relPath)
 		} else if strings.HasPrefix(zipPath, "journals/") {
+			// Skip if not importing journals
+			if !importJournals {
+				continue
+			}
 			// Extract to journals directory
 			relPath := strings.TrimPrefix(zipPath, "journals/")
 			destPath = filepath.Join(cfg.JournalDir, relPath)
