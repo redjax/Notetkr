@@ -289,6 +289,16 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textarea, cmd = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnd})
 				return m, tea.Batch(cmd, textarea.Blink)
 
+			case "o":
+				// Insert new line below cursor and enter insert mode (like vim)
+				m.mode = ModeInsert
+				m.textarea.Focus()
+				// Move to end of current line, then insert newline
+				m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnd})
+				m.textarea, cmd = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				m.trackContentChange()
+				return m, tea.Batch(cmd, textarea.Blink)
+
 			case "h":
 				m.textarea, cmd = m.textarea.Update(tea.KeyMsg{Type: tea.KeyLeft})
 				return m, cmd

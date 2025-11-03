@@ -182,6 +182,15 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textarea, cmd = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRight})
 				return m, cmd
 
+			case "o":
+				// Insert new line below cursor and enter insert mode (like vim)
+				m.mode = ModeInsert
+				// Move to end of current line, then insert newline
+				m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnd})
+				m.textarea, cmd = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				m.trackContentChange()
+				return m, cmd
+
 			case "ctrl+s":
 				// Save journal (works in both modes)
 				m.saved = false
