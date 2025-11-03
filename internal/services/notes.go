@@ -569,7 +569,6 @@ attendees:
 
 ## Takeaways
 
-
 `,
 		"todo-list.md": `---
 tags: todo
@@ -587,7 +586,6 @@ keywords:
 ## Completed
 
 - [x] 
-
 `,
 		"blank.md": `---
 tags:
@@ -595,7 +593,6 @@ keywords:
 ---
 
 # 
-
 `,
 	}
 
