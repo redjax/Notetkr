@@ -160,6 +160,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 		}
 		return m, tea.Batch(cmd, m.currentView.Init())
+	case OpenWeeklySummaryFileMsg:
+		// Open weekly summary file in editor
+		m.currentView = NewNotesEditor(m.notesService, msg.filePath)
+		// Send window size to new view
+		if m.width > 0 && m.height > 0 {
+			m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		}
+		return m, tea.Batch(cmd, m.currentView.Init())
 	case BackToDashboardMsg:
 		// Return to dashboard
 		m.currentView = NewDashboard()

@@ -294,10 +294,12 @@ func (j *JournalService) GenerateWeeklySummary(weekStart time.Time) (string, err
 			// Extract individual task lines for combined list
 			taskLines := strings.Split(tasks, "\n")
 			for _, line := range taskLines {
+				// Preserve indentation but check trimmed version for content
 				trimmed := strings.TrimSpace(line)
 				// Only include non-empty lines that start with a bullet or dash
 				if trimmed != "" && (strings.HasPrefix(trimmed, "-") || strings.HasPrefix(trimmed, "*")) {
-					allTasks = append(allTasks, trimmed)
+					// Keep original line with indentation
+					allTasks = append(allTasks, line)
 				}
 			}
 		}
