@@ -22,12 +22,37 @@ func NewJournalCmd(getConfig func() *config.Config) *cobra.Command {
 		},
 	}
 
+	// Add today subcommand
+	todayCmd := &cobra.Command{
+		Use:   "today",
+		Short: "Open today's journal entry",
+		Long:  `Opens today's journal entry directly in the editor.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg := getConfig()
+			runTodayJournal(cfg)
+		},
+	}
+	cmd.AddCommand(todayCmd)
+
 	return cmd
 }
 
 func runJournal(cfg *config.Config) {
 	// Open directly to journals view
 	app := tui.NewJournalBrowserApp(cfg.JournalDir, cfg.NotesDir)
+
+	// Start the TUI
+	p := tea.NewProgram(app, tea.WithAltScreen())
+
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error running journal TUI: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runTodayJournal(cfg *config.Config) {
+	// Open directly to today's journal entry
+	app := tui.NewTodayJournalApp(cfg.JournalDir, cfg.NotesDir)
 
 	// Start the TUI
 	p := tea.NewProgram(app, tea.WithAltScreen())
