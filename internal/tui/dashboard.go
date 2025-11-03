@@ -34,6 +34,7 @@ func NewDashboard() DashboardModel {
 			"Today's Journal",
 			"Journals",
 			"Notes",
+			"Search",
 			"Quit",
 		},
 		cursor:   0,
@@ -84,7 +85,11 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, func() tea.Msg {
 					return MenuSelectionMsg{Selection: "notes"}
 				}
-			case 3: // Quit
+			case 3: // Search
+				return m, func() tea.Msg {
+					return MenuSelectionMsg{Selection: "search"}
+				}
+			case 4: // Quit
 				return m, tea.Quit
 			}
 		}

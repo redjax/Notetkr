@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -120,4 +121,77 @@ func (j *JournalService) WriteJournal(date time.Time, content string) error {
 	}
 
 	return nil
+}
+
+// JournalEntry represents a journal entry with metadata
+type JournalEntry struct {
+	Date     time.Time
+	FilePath string
+	Preview  string
+}
+
+// SearchJournals searches all journal entries by content
+func (j *JournalService) SearchJournals(query string) ([]JournalEntry, error) {
+	var results []JournalEntry
+
+	if query == "" {
+		return results, nil
+	}
+
+	query = strings.ToLower(query)
+
+	// Walk through all journal files
+	err := filepath.Walk(j.journalDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip files we can't access
+		}
+
+		// Only process .md files
+		if info.IsDir() || filepath.Ext(path) != ".md" {
+			return nil
+		}
+
+		// Read file content
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil // Skip files we can't read
+		}
+
+		contentStr := string(content)
+
+		// Check if content contains query
+		if strings.Contains(strings.ToLower(contentStr), query) {
+			// Try to parse date from filename (format: YYYY-MM-DD.md)
+			filename := filepath.Base(path)
+			dateStr := strings.TrimSuffix(filename, ".md")
+			date, err := time.Parse("2006-01-02", dateStr)
+			if err != nil {
+				// If we can't parse the date, skip this entry
+				return nil
+			}
+
+			// Create preview (first 100 chars or first line)
+			preview := contentStr
+			if len(preview) > 100 {
+				preview = preview[:100] + "..."
+			}
+			if idx := strings.Index(preview, "\n"); idx > 0 && idx < 100 {
+				preview = preview[:idx] + "..."
+			}
+
+			results = append(results, JournalEntry{
+				Date:     date,
+				FilePath: path,
+				Preview:  preview,
+			})
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("error searching journals: %w", err)
+	}
+
+	return results, nil
 }

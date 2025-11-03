@@ -93,6 +93,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Open notes browser
 			m.currentView = NewNotesBrowser(m.notesService, m.width, m.height)
 			return m, m.currentView.Init()
+		case "search":
+			// Open search browser
+			m.currentView = NewSearchBrowser(m.journalService, m.notesService, m.width, m.height)
+			return m, m.currentView.Init()
 		}
 	case OpenJournalMsg:
 		// Open specific journal date in editor
