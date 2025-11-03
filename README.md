@@ -90,6 +90,8 @@ nt import -f ~/Downloads/notetkr-export.zip
 
 Notetakr stores its files in `$HOME/.notetkr`. Journals & summaries are in `$HOME/.notetkr/journal` and notes are stored in `$HOME/.notetkr/notes`.
 
+To generate a new weekly summary, run `nt journal` and press the `g` key to open the "generate summary" menu.
+
 ### Editing
 
 When opening a journal entry or note, you will be presented with a modal editor similar to Neovim. Navigate around with `hjkl` or the arrow keys, and switch to INSERT mode with `i`. You can press `g` to put the cursor at the top of the document, or `G` to go to the bottom. Pressing `d` will delete the current line the cursor is on (deletes text to the right of the cursor; if you move the cursor to a different column, anything to the left will remain). `CTRL+Z` undoes a change and `CTRL+Y` redoes it.
