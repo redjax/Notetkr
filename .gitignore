@@ -28,3 +28,12 @@ Thumbs.db
 
 # Vulnerability reports
 vulnerability-reports/
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.tar.bz2
+*.rar
+*.7z
+*.xz
