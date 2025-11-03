@@ -74,6 +74,20 @@ func NewSearchBrowserApp(journalDir, notesDir string, query string) AppModel {
 	}
 }
 
+// NewTodayJournalApp creates a new app model starting with today's journal open
+func NewTodayJournalApp(journalDir, notesDir string) AppModel {
+	journalService := services.NewJournalService(journalDir)
+	notesService := services.NewNotesService(notesDir)
+
+	return AppModel{
+		currentView:    NewJournalEditor(journalService, time.Now()),
+		journalService: journalService,
+		notesService:   notesService,
+		journalDir:     journalDir,
+		notesDir:       notesDir,
+	}
+}
+
 func (m AppModel) Init() tea.Cmd {
 	return m.currentView.Init()
 }
