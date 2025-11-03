@@ -48,6 +48,7 @@ func init() {
 	rootCmd.AddCommand(commands.NewNotesCmd(func() *config.Config { return cfg }))
 	rootCmd.AddCommand(commands.NewSearchCmd(func() *config.Config { return cfg }))
 	rootCmd.AddCommand(commands.NewExportCmd(func() *config.Config { return cfg }))
+	rootCmd.AddCommand(commands.NewImportCmd(func() *config.Config { return cfg }))
 
 	// Handle persistent flags
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
