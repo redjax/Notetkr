@@ -84,7 +84,7 @@ func (j *JournalService) CreateOrOpenJournal(date time.Time) (string, error) {
 	// Check if file exists
 	if _, err := os.Stat(journalPath); os.IsNotExist(err) {
 		// Create new journal entry with header
-		header := fmt.Sprintf("# Journal Entry - %s\n\n", date.Format("Monday, January 2, 2006"))
+		header := fmt.Sprintf("# Journal Entry - %s\n\n## Tasks\n\n- \n\n", date.Format("Monday, January 2, 2006"))
 		if err := os.WriteFile(journalPath, []byte(header), 0644); err != nil {
 			return "", fmt.Errorf("failed to create journal file: %w", err)
 		}
