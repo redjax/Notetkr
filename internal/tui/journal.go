@@ -75,6 +75,10 @@ func (m JournalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		return m, nil
 
+	case WeeklySummaryGeneratedMsg:
+		// Switch to weekly summary viewer
+		return NewWeeklySummaryViewer(m.journalService, msg.summary, msg.weekStart, msg.weekEnd), nil
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -91,6 +95,10 @@ func (m JournalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "r":
 			// Reload journal
 			return m, m.loadJournal
+
+		case "g":
+			// Open weekly summary menu
+			return NewWeeklySummaryMenu(m.journalService), nil
 		}
 	}
 
@@ -143,7 +151,7 @@ func (m JournalModel) View() string {
 	s += contentStyle.Render(m.content) + "\n\n"
 
 	// Help
-	s += helpStyle.Render("e: edit in $EDITOR • r: reload • esc: back to dashboard • q: quit")
+	s += helpStyle.Render("e: edit in $EDITOR • r: reload • g: weekly summary • esc: back to dashboard • q: quit")
 
 	return s
 }

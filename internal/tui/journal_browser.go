@@ -217,6 +217,12 @@ func (m JournalBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.deleteTargetPath = targetPath
 			}
 
+		case "g":
+			// Open weekly summary menu
+			return m, func() tea.Msg {
+				return OpenWeeklySummaryMenuMsg{}
+			}
+
 		case "enter", "l", "right", " ":
 			if len(m.items) == 0 {
 				return m, nil
@@ -293,7 +299,7 @@ func (m JournalBrowserModel) View() string {
 		}
 	}
 
-	s += "\n" + helpStyle.Render("↑/k: up • ↓/j: down • enter/l: open • esc/h: back • d: delete • q: quit")
+	s += "\n" + helpStyle.Render("↑/k: up • ↓/j: down • enter/l: open • esc/h: back • g: weekly summary • d: delete • q: quit")
 
 	// Fill the screen
 	if m.width > 0 && m.height > 0 {
@@ -311,3 +317,5 @@ type OpenJournalMsg struct {
 }
 
 type BackToJournalBrowserMsg struct{}
+
+type OpenWeeklySummaryMenuMsg struct{}
