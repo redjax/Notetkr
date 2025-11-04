@@ -38,6 +38,7 @@ type NotesBrowserModel struct {
 	confirmDelete    bool
 	deleteTarget     string
 	deleteTargetIdx  int
+	previewService   *services.PreviewService
 }
 
 var (
@@ -81,6 +82,7 @@ func NewNotesBrowser(notesService *services.NotesService, width, height int) Not
 		showingTemplates: false,
 		width:            width,
 		height:           height,
+		previewService:   services.NewPreviewService(),
 	}
 
 	// Initialize default templates
@@ -344,6 +346,20 @@ func (m NotesBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.deleteTargetIdx = m.cursor
 			}
 			return m, nil
+
+		case "p":
+			// Preview note in browser
+			if len(m.filteredNotes) > 0 {
+				note := m.filteredNotes[m.cursor]
+				// Read the note content
+				content, err := m.notesService.ReadNote(note.FilePath)
+				if err == nil {
+					go func() {
+						_ = m.previewService.PreviewMarkdown(note.FilePath, content)
+					}()
+				}
+			}
+			return m, nil
 		}
 	}
 
@@ -414,7 +430,7 @@ func (m NotesBrowserModel) View() string {
 	} else if m.filterMode == FilterSearch && m.searchInput.Focused() {
 		s += helpStyle.Render("enter: search • esc: cancel")
 	} else {
-		s += helpStyle.Render("↑/k: up • ↓/j: down • enter/l: open • n: new (from template) • /: search • t: tags • c: clear filter • r: refresh • d: delete • esc/h: back • q: quit")
+		s += helpStyle.Render("↑/k: up • ↓/j: down • enter/l: open • p: preview • n: new • /: search • t: tags • c: clear filter • r: refresh • d: delete • esc/h: back • q: quit")
 	}
 
 	// Fill the screen

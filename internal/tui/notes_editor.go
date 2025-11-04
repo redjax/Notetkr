@@ -38,6 +38,7 @@ type NotesEditorModel struct {
 	clipboardHandler *utils.ClipboardImageHandler
 	showQuitConfirm  bool
 	initialContent   string
+	previewService   *services.PreviewService
 }
 
 var (
@@ -86,6 +87,7 @@ func NewNotesEditor(notesService *services.NotesService, filePath string) NotesE
 		redoStack:        []undoState{},
 		lastContent:      "",
 		clipboardHandler: clipboardHandler,
+		previewService:   services.NewPreviewService(),
 	}
 
 	return m
@@ -114,6 +116,7 @@ func NewNotesEditorForNew(notesService *services.NotesService) NotesEditorModel 
 		redoStack:        []undoState{},
 		lastContent:      "",
 		clipboardHandler: clipboardHandler,
+		previewService:   services.NewPreviewService(),
 	}
 
 	return m
@@ -143,6 +146,7 @@ func NewNotesEditorForNewWithTemplate(notesService *services.NotesService, templ
 		redoStack:        []undoState{},
 		lastContent:      "",
 		clipboardHandler: clipboardHandler,
+		previewService:   services.NewPreviewService(),
 	}
 
 	return m
@@ -387,6 +391,17 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "d":
 				// Delete current line (like dd in vim)
 				m.deleteLine()
+				return m, nil
+
+			case "p":
+				// Preview markdown in browser
+				if m.filePath != "" {
+					content := m.textarea.Value()
+					go func() {
+						_ = m.previewService.PreviewMarkdown(m.filePath, content)
+					}()
+					m.saveMsg = "✓ Opening preview in browser..."
+				}
 				return m, nil
 			}
 			return m, nil
@@ -715,7 +730,7 @@ func (m NotesEditorModel) View() string {
 
 		var help string
 		if m.mode == ModeNormal {
-			help = "hjkl: move • i/a/o: insert • d: delete line • 0/$: line start/end • g/G: top/bottom • ctrl+s: save • q: back to browser"
+			help = "hjkl: move • i/a/o: insert • d: delete line • p: preview • 0/$: line start/end • g/G: top/bottom • ctrl+s: save • q: back"
 		} else {
 			help = "esc: normal mode • ctrl+z/y: undo/redo • alt+v: paste image • ctrl+s: save • ctrl+c: quit"
 		}
