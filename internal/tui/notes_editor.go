@@ -623,7 +623,8 @@ func (m *NotesEditorModel) pasteImage() error {
 	}
 
 	// Insert the markdown image syntax at cursor position
-	imageMarkdown := fmt.Sprintf("![Pasted image](%s)", relativePath)
+	// Use angle brackets to handle paths with spaces
+	imageMarkdown := fmt.Sprintf("![Pasted image](<%s>)", relativePath)
 
 	// Get current content and cursor position
 	content := m.textarea.Value()
