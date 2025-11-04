@@ -586,41 +586,20 @@ func (m *NotesEditorModel) pasteImage() error {
 		return fmt.Errorf("clipboard handler not initialized")
 	}
 
-	// Determine the base directory and note name
-	var attachmentsDir string
-	var baseName string
+	// Get the notes directory
+	notesDir := m.notesService.GetNotesDir()
 
-	if m.filePath != "" {
-		// For existing notes, use the note's directory
-		noteDir := filepath.Dir(m.filePath)
-		noteName := strings.TrimSuffix(filepath.Base(m.filePath), filepath.Ext(m.filePath))
-
-		// Create .attachments/<note-name>/ directory
-		attachmentsDir = filepath.Join(noteDir, ".attachments", noteName)
-		baseName = "image"
-	} else if m.noteName != "" {
-		// For new notes, use the notes directory
-		notesDir := m.notesService.GetNotesDir()
-		attachmentsDir = filepath.Join(notesDir, ".attachments", m.noteName)
-		baseName = "image"
-	} else {
-		return fmt.Errorf("cannot determine note location for image attachment")
-	}
+	// Use a centralized .attachments/imgs directory
+	imgsDir := filepath.Join(notesDir, ".attachments", "imgs")
 
 	// Save the image and get the filename
-	filename, err := m.clipboardHandler.SaveClipboardImage(attachmentsDir, baseName)
+	filename, err := m.clipboardHandler.SaveClipboardImage(imgsDir, "image")
 	if err != nil {
 		return err
 	}
 
 	// Create the relative path for the markdown link
-	var relativePath string
-	if m.noteName != "" {
-		relativePath = fmt.Sprintf(".attachments/%s/%s", m.noteName, filename)
-	} else {
-		noteName := strings.TrimSuffix(filepath.Base(m.filePath), filepath.Ext(m.filePath))
-		relativePath = fmt.Sprintf(".attachments/%s/%s", noteName, filename)
-	}
+	relativePath := fmt.Sprintf(".attachments/imgs/%s", filename)
 
 	// Insert the markdown image syntax at cursor position
 	// Use angle brackets to handle paths with spaces

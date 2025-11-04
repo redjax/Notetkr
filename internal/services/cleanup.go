@@ -308,7 +308,7 @@ func (s *CleanupService) updateFileReferences(filePath string, refs []ImageRefer
 		// Create a regex to match this specific image reference
 		// Handle both with and without angle brackets
 		escapedPath := regexp.QuoteMeta(ref.ImagePath)
-		
+
 		// Try with angle brackets first
 		patternWithBrackets := regexp.MustCompile(fmt.Sprintf(`!\[([^\]]*)\]\(<\s*%s\s*>\)`, escapedPath))
 		if patternWithBrackets.MatchString(contentStr) {

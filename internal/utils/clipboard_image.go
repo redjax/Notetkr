@@ -52,10 +52,10 @@ func (h *ClipboardImageHandler) HasImage() bool {
 	return len(data) > 0
 }
 
-// SaveClipboardImage saves the clipboard image to the specified directory
-// Returns the relative path to the saved image
-// If an identical image already exists, returns the path to the existing image
-func (h *ClipboardImageHandler) SaveClipboardImage(attachmentsDir, baseName string) (string, error) {
+// SaveClipboardImage saves the clipboard image to a centralized attachments directory
+// Returns just the filename (since all images are in the same imgs directory)
+// If an identical image already exists, returns the existing filename
+func (h *ClipboardImageHandler) SaveClipboardImage(imgsDir, baseName string) (string, error) {
 	if !h.initialized {
 		if err := h.Initialize(); err != nil {
 			return "", err
@@ -85,26 +85,19 @@ func (h *ClipboardImageHandler) SaveClipboardImage(attachmentsDir, baseName stri
 	hash := sha256.Sum256(imageBytes)
 	hashString := hex.EncodeToString(hash[:])
 
-	// Create attachments directory if it doesn't exist
-	if err := os.MkdirAll(attachmentsDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create attachments directory: %w", err)
-	}
-
-	// Check if an image with this hash already exists
-	existingFile, err := findImageByHash(attachmentsDir, hashString)
-	if err == nil && existingFile != "" {
-		// Image already exists, return the existing filename
-		return filepath.Base(existingFile), nil
-	}
-
-	// Generate filename with hash prefix for easy deduplication
+	// Generate filename with hash prefix
 	filename := fmt.Sprintf("%s-%s.png", baseName, hashString[:12])
-	imagePath := filepath.Join(attachmentsDir, filename)
+	imagePath := filepath.Join(imgsDir, filename)
 
-	// Check if file already exists (by name)
+	// Check if file already exists (by name/hash)
 	if _, err := os.Stat(imagePath); err == nil {
 		// File already exists, return existing filename
 		return filename, nil
+	}
+
+	// Create imgs directory if it doesn't exist
+	if err := os.MkdirAll(imgsDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create imgs directory: %w", err)
 	}
 
 	// Create the file
@@ -120,6 +113,63 @@ func (h *ClipboardImageHandler) SaveClipboardImage(attachmentsDir, baseName stri
 	}
 
 	return filename, nil
+}
+
+// findImageByHashGlobal searches for an existing image file with the given hash
+// across all .attachments directories in the root directory
+func findImageByHashGlobal(rootDir, hash string) (string, error) {
+	hashPrefix := hash[:12]
+	var foundFile string
+
+	// Walk through all directories looking for .attachments folders
+	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip errors
+		}
+
+		// Only look in .attachments directories
+		if !info.IsDir() || filepath.Base(path) != ".attachments" {
+			return nil
+		}
+
+		// Search for images with matching hash in this .attachments directory
+		filepath.Walk(path, func(imgPath string, imgInfo os.FileInfo, err error) error {
+			if err != nil || imgInfo.IsDir() {
+				return nil
+			}
+
+			// Check if this is a PNG file with matching hash
+			if filepath.Ext(imgPath) == ".png" {
+				filename := filepath.Base(imgPath)
+				// Check if filename contains the hash prefix (format: image-HASH.png)
+				if len(filename) >= 16 {
+					// Extract the hash part (after "image-" and before ".png")
+					parts := filename[len("image-"):]
+					if len(parts) >= 12 && parts[:12] == hashPrefix {
+						foundFile = imgPath
+						return filepath.SkipDir // Stop searching once found
+					}
+				}
+			}
+			return nil
+		})
+
+		if foundFile != "" {
+			return filepath.SkipDir // Stop outer walk if we found the file
+		}
+
+		return nil
+	})
+
+	if foundFile != "" {
+		return foundFile, nil
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	return "", fmt.Errorf("no matching image found")
 }
 
 // findImageByHash searches for an existing image file with the given hash
