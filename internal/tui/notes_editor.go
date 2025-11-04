@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/redjax/notetkr/internal/services"
+	"github.com/redjax/notetkr/internal/utils"
 )
 
 type undoState struct {
@@ -18,21 +20,22 @@ type undoState struct {
 }
 
 type NotesEditorModel struct {
-	notesService *services.NotesService
-	filePath     string
-	templatePath string
-	textarea     textarea.Model
-	mode         EditorMode
-	width        int
-	height       int
-	saveMsg      string
-	saved        bool
-	err          error
-	isNewNote    bool
-	noteName     string
-	undoStack    []undoState
-	redoStack    []undoState
-	lastContent  string
+	notesService     *services.NotesService
+	filePath         string
+	templatePath     string
+	textarea         textarea.Model
+	mode             EditorMode
+	width            int
+	height           int
+	saveMsg          string
+	saved            bool
+	err              error
+	isNewNote        bool
+	noteName         string
+	undoStack        []undoState
+	redoStack        []undoState
+	lastContent      string
+	clipboardHandler *utils.ClipboardImageHandler
 }
 
 var (
@@ -66,16 +69,21 @@ func NewNotesEditor(notesService *services.NotesService, filePath string) NotesE
 	ta.SetWidth(80)
 	ta.SetHeight(20)
 
+	clipboardHandler := utils.NewClipboardImageHandler()
+	// Try to initialize clipboard, but don't fail if it doesn't work
+	_ = clipboardHandler.Initialize()
+
 	m := NotesEditorModel{
-		notesService: notesService,
-		filePath:     filePath,
-		textarea:     ta,
-		mode:         ModeNormal,
-		saved:        false,
-		isNewNote:    false,
-		undoStack:    []undoState{},
-		redoStack:    []undoState{},
-		lastContent:  "",
+		notesService:     notesService,
+		filePath:         filePath,
+		textarea:         ta,
+		mode:             ModeNormal,
+		saved:            false,
+		isNewNote:        false,
+		undoStack:        []undoState{},
+		redoStack:        []undoState{},
+		lastContent:      "",
+		clipboardHandler: clipboardHandler,
 	}
 
 	return m
@@ -91,15 +99,19 @@ func NewNotesEditorForNew(notesService *services.NotesService) NotesEditorModel 
 	ta.SetWidth(80)
 	ta.SetHeight(1)
 
+	clipboardHandler := utils.NewClipboardImageHandler()
+	_ = clipboardHandler.Initialize()
+
 	m := NotesEditorModel{
-		notesService: notesService,
-		textarea:     ta,
-		mode:         ModeInsert, // Start in insert mode for name
-		saved:        false,
-		isNewNote:    true,
-		undoStack:    []undoState{},
-		redoStack:    []undoState{},
-		lastContent:  "",
+		notesService:     notesService,
+		textarea:         ta,
+		mode:             ModeInsert, // Start in insert mode for name
+		saved:            false,
+		isNewNote:        true,
+		undoStack:        []undoState{},
+		redoStack:        []undoState{},
+		lastContent:      "",
+		clipboardHandler: clipboardHandler,
 	}
 
 	return m
@@ -115,16 +127,20 @@ func NewNotesEditorForNewWithTemplate(notesService *services.NotesService, templ
 	ta.SetWidth(80)
 	ta.SetHeight(1)
 
+	clipboardHandler := utils.NewClipboardImageHandler()
+	_ = clipboardHandler.Initialize()
+
 	m := NotesEditorModel{
-		notesService: notesService,
-		templatePath: templatePath,
-		textarea:     ta,
-		mode:         ModeInsert, // Start in insert mode for name
-		saved:        false,
-		isNewNote:    true,
-		undoStack:    []undoState{},
-		redoStack:    []undoState{},
-		lastContent:  "",
+		notesService:     notesService,
+		templatePath:     templatePath,
+		textarea:         ta,
+		mode:             ModeInsert, // Start in insert mode for name
+		saved:            false,
+		isNewNote:        true,
+		undoStack:        []undoState{},
+		redoStack:        []undoState{},
+		lastContent:      "",
+		clipboardHandler: clipboardHandler,
 	}
 
 	return m
@@ -369,6 +385,31 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.redo()
 				return m, nil
 
+			case "alt+v":
+				// Paste image from clipboard
+				m.saveMsg = "Checking clipboard for image..."
+
+				if m.clipboardHandler == nil {
+					m.saveMsg = "⚠ Clipboard handler not initialized"
+					return m, nil
+				}
+
+				hasImage := m.clipboardHandler.HasImage()
+				if hasImage {
+					// Handle image paste
+					m.saveMsg = "Image detected, saving..."
+					if err := m.pasteImage(); err != nil {
+						m.saveMsg = fmt.Sprintf("❌ Error: %v", err)
+					} else {
+						m.saveMsg = "✓ Image inserted successfully!"
+					}
+					return m, nil
+				}
+
+				// No image in clipboard
+				m.saveMsg = "❌ No image in clipboard"
+				return m, nil
+
 			default:
 				m.textarea, cmd = m.textarea.Update(msg)
 				return m, cmd
@@ -539,6 +580,78 @@ func (m *NotesEditorModel) deleteLine() {
 	m.trackContentChange()
 }
 
+// pasteImage handles pasting an image from the clipboard
+func (m *NotesEditorModel) pasteImage() error {
+	if m.clipboardHandler == nil {
+		return fmt.Errorf("clipboard handler not initialized")
+	}
+
+	// Determine the base directory and note name
+	var attachmentsDir string
+	var baseName string
+
+	if m.filePath != "" {
+		// For existing notes, use the note's directory
+		noteDir := filepath.Dir(m.filePath)
+		noteName := strings.TrimSuffix(filepath.Base(m.filePath), filepath.Ext(m.filePath))
+
+		// Create .attachments/<note-name>/ directory
+		attachmentsDir = filepath.Join(noteDir, ".attachments", noteName)
+		baseName = "image"
+	} else if m.noteName != "" {
+		// For new notes, use the notes directory
+		notesDir := m.notesService.GetNotesDir()
+		attachmentsDir = filepath.Join(notesDir, ".attachments", m.noteName)
+		baseName = "image"
+	} else {
+		return fmt.Errorf("cannot determine note location for image attachment")
+	}
+
+	// Save the image and get the filename
+	filename, err := m.clipboardHandler.SaveClipboardImage(attachmentsDir, baseName)
+	if err != nil {
+		return err
+	}
+
+	// Create the relative path for the markdown link
+	var relativePath string
+	if m.noteName != "" {
+		relativePath = fmt.Sprintf(".attachments/%s/%s", m.noteName, filename)
+	} else {
+		noteName := strings.TrimSuffix(filepath.Base(m.filePath), filepath.Ext(m.filePath))
+		relativePath = fmt.Sprintf(".attachments/%s/%s", noteName, filename)
+	}
+
+	// Insert the markdown image syntax at cursor position
+	// Use angle brackets to handle paths with spaces
+	imageMarkdown := fmt.Sprintf("![Pasted image](<%s>)", relativePath)
+
+	// Get current content and cursor position
+	content := m.textarea.Value()
+	lines := strings.Split(content, "\n")
+	lineInfo := m.textarea.LineInfo()
+	currentLine := m.textarea.Line()
+
+	// Calculate cursor position from line and column
+	cursorPos := 0
+	for i := 0; i < currentLine && i < len(lines); i++ {
+		cursorPos += len(lines[i]) + 1 // +1 for newline
+	}
+	cursorPos += lineInfo.ColumnOffset
+
+	// Insert the markdown at cursor position
+	newContent := content[:cursorPos] + imageMarkdown + content[cursorPos:]
+	m.textarea.SetValue(newContent)
+
+	// Move cursor after the inserted text
+	m.textarea.SetCursor(cursorPos + len(imageMarkdown))
+
+	// Track the change
+	m.trackContentChange()
+
+	return nil
+}
+
 func (m NotesEditorModel) View() string {
 	if m.err != nil {
 		return fmt.Sprintf("\n  Error: %v\n\n  Press 'esc' to go back\n", m.err)
@@ -584,9 +697,9 @@ func (m NotesEditorModel) View() string {
 
 		var help string
 		if m.mode == ModeNormal {
-			help = "hjkl: move • i/a: insert • d: delete line • 0/$: line start/end • g/G: top/bottom • ctrl+s: save • q: back to browser"
+			help = "hjkl: move • i/a/o: insert • d: delete line • 0/$: line start/end • g/G: top/bottom • ctrl+s: save • q: back to browser"
 		} else {
-			help = "esc: normal mode • ctrl+z/y: undo/redo • ctrl+s: save • ctrl+c: quit"
+			help = "esc: normal mode • ctrl+z/y: undo/redo • alt+v: paste image • ctrl+s: save • ctrl+c: quit"
 		}
 		b.WriteString(notesHelpStyle.Render(help))
 	}

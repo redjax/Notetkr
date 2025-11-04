@@ -41,6 +41,11 @@ func NewNotesService(notesDir string) *NotesService {
 	}
 }
 
+// GetNotesDir returns the notes directory path
+func (s *NotesService) GetNotesDir() string {
+	return s.notesDir
+}
+
 // ListNotes returns all notes in the notes directory (excluding templates)
 func (s *NotesService) ListNotes() ([]Note, error) {
 	var notes []Note
