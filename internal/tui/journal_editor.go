@@ -37,6 +37,7 @@ type JournalEditorModel struct {
 	clipboardHandler *utils.ClipboardImageHandler
 	showQuitConfirm  bool
 	initialContent   string
+	previewService   *services.PreviewService
 }
 
 var (
@@ -88,6 +89,7 @@ func NewJournalEditor(journalService *services.JournalService, date time.Time) J
 		redoStack:        []undoState{},
 		lastContent:      "",
 		clipboardHandler: clipboardHandler,
+		previewService:   services.NewPreviewService(),
 	}
 
 	return m
@@ -291,6 +293,17 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "d":
 				// Delete current line (like dd in vim)
 				m.deleteLine()
+				return m, nil
+
+			case "p":
+				// Preview markdown in browser
+				if m.filePath != "" {
+					content := m.textarea.Value()
+					go func() {
+						_ = m.previewService.PreviewMarkdown(m.filePath, content)
+					}()
+					m.saveMsg = "✓ Opening preview in browser..."
+				}
 				return m, nil
 			}
 			// Block all other keys in normal mode (don't pass to textarea)
@@ -623,7 +636,7 @@ func (m JournalEditorModel) View() string {
 	// Help - different based on mode
 	var help string
 	if m.mode == ModeNormal {
-		help = "hjkl: move • i/a/o: insert • d: delete line • 0/$: line start/end • g/G: top/bottom • ctrl+z/y: undo/redo • ctrl+s: save • q: back"
+		help = "hjkl: move • i/a/o: insert • d: delete line • p: preview • 0/$: line start/end • g/G: top/bottom • ctrl+s: save • q: back"
 	} else {
 		help = "esc: normal mode • ctrl+z/y: undo/redo • alt+v: paste image • ctrl+s: save • ctrl+c: quit"
 	}
