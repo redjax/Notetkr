@@ -36,6 +36,8 @@ type NotesEditorModel struct {
 	redoStack        []undoState
 	lastContent      string
 	clipboardHandler *utils.ClipboardImageHandler
+	showQuitConfirm  bool
+	initialContent   string
 }
 
 var (
@@ -201,6 +203,7 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textarea.CursorStart()
 		// Initialize undo stack with the loaded content
 		m.lastContent = msg.content
+		m.initialContent = msg.content
 		return m, nil
 
 	case NotesEditorErrorMsg:
@@ -210,6 +213,7 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case NotesSavedMsg:
 		m.saved = true
 		m.saveMsg = "✓ Saved"
+		m.initialContent = m.textarea.Value()
 		return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
 			return ClearSaveMsg{}
 		})
@@ -273,9 +277,30 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Normal editor mode
 		if m.mode == ModeNormal {
+			// Handle quit confirmation dialog
+			if m.showQuitConfirm {
+				switch msg.String() {
+				case "y", "Y":
+					// User confirmed quit
+					return m, func() tea.Msg {
+						return BackToNotesBrowserMsg{}
+					}
+				case "n", "N", "esc":
+					// User cancelled quit
+					m.showQuitConfirm = false
+					return m, nil
+				}
+				return m, nil
+			}
+
 			switch msg.String() {
 			case "q":
-				// Go back to notes browser
+				// Check if there are unsaved changes
+				if m.hasUnsavedChanges() {
+					m.showQuitConfirm = true
+					return m, nil
+				}
+				// No unsaved changes, go back to notes browser
 				return m, func() tea.Msg {
 					return BackToNotesBrowserMsg{}
 				}
@@ -531,6 +556,11 @@ func (m *NotesEditorModel) redo() {
 	m.textarea.SetCursor(nextState.column)
 }
 
+// hasUnsavedChanges checks if the current content differs from the initial/saved content
+func (m *NotesEditorModel) hasUnsavedChanges() bool {
+	return m.textarea.Value() != m.initialContent
+}
+
 // deleteLine deletes the current line where the cursor is positioned
 func (m *NotesEditorModel) deleteLine() {
 	content := m.textarea.Value()
@@ -673,6 +703,15 @@ func (m NotesEditorModel) View() string {
 
 		b.WriteString(m.textarea.View())
 		b.WriteString("\n\n")
+
+		// Show quit confirmation dialog if needed
+		if m.showQuitConfirm {
+			confirmStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("226")).
+				Bold(true)
+			b.WriteString(confirmStyle.Render("⚠ You have unsaved changes. Quit anyway? (y/n)"))
+			b.WriteString("\n\n")
+		}
 
 		var help string
 		if m.mode == ModeNormal {

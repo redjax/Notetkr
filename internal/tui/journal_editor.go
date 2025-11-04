@@ -35,6 +35,8 @@ type JournalEditorModel struct {
 	redoStack        []undoState
 	lastContent      string
 	clipboardHandler *utils.ClipboardImageHandler
+	showQuitConfirm  bool
+	initialContent   string
 }
 
 var (
@@ -144,6 +146,7 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textarea.CursorStart()
 		// Initialize undo stack with the loaded content
 		m.lastContent = msg.content
+		m.initialContent = msg.content
 		return m, nil
 
 	case JournalEditorErrorMsg:
@@ -155,6 +158,7 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saved = true
 		m.saveMsg = "✓ Saved"
 		m.err = nil
+		m.initialContent = m.textarea.Value()
 		// Clear save message after 2 seconds
 		return m, tea.Tick(time.Second*2, func(t time.Time) tea.Msg {
 			return ClearSaveMsg{}
@@ -167,12 +171,33 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		// Handle mode-specific keys
 		if m.mode == ModeNormal {
+			// Handle quit confirmation dialog
+			if m.showQuitConfirm {
+				switch msg.String() {
+				case "y", "Y":
+					// User confirmed quit
+					return m, func() tea.Msg {
+						return BackToJournalBrowserMsg{}
+					}
+				case "n", "N", "esc":
+					// User cancelled quit
+					m.showQuitConfirm = false
+					return m, nil
+				}
+				return m, nil
+			}
+
 			switch msg.String() {
 			case "ctrl+c":
 				return m, tea.Quit
 
 			case "q":
-				// Return to journal browser
+				// Check if there are unsaved changes
+				if m.hasUnsavedChanges() {
+					m.showQuitConfirm = true
+					return m, nil
+				}
+				// No unsaved changes, return to journal browser
 				return m, func() tea.Msg {
 					return BackToJournalBrowserMsg{}
 				}
@@ -492,6 +517,11 @@ func (m *JournalEditorModel) deleteLine() {
 	m.trackContentChange()
 }
 
+// hasUnsavedChanges checks if the current content differs from the initial/saved content
+func (m *JournalEditorModel) hasUnsavedChanges() bool {
+	return m.textarea.Value() != m.initialContent
+}
+
 // pasteImage handles pasting an image from the clipboard
 func (m *JournalEditorModel) pasteImage() error {
 	if m.clipboardHandler == nil {
@@ -580,6 +610,15 @@ func (m JournalEditorModel) View() string {
 	// Textarea
 	b.WriteString(m.textarea.View())
 	b.WriteString("\n\n")
+
+	// Show quit confirmation dialog if needed
+	if m.showQuitConfirm {
+		confirmStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("226")).
+			Bold(true)
+		b.WriteString(confirmStyle.Render("⚠ You have unsaved changes. Quit anyway? (y/n)"))
+		b.WriteString("\n\n")
+	}
 
 	// Help - different based on mode
 	var help string
