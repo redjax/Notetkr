@@ -111,7 +111,7 @@ func runDashboard() {
 	ensureDataDirs()
 
 	// Create and run the dashboard TUI
-	app := tui.NewAppModel(cfg.JournalDir, cfg.NotesDir)
+	app := tui.NewAppModel(cfg)
 	p := tea.NewProgram(app, tea.WithAltScreen())
 
 	if _, err := p.Run(); err != nil {
