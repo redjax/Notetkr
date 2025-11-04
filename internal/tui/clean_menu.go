@@ -107,7 +107,7 @@ func (m *CleanMenuApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor++
 			}
 
-		case "enter":
+		case "enter", "l", "right", " ":
 			selected := m.options[m.cursor]
 			if selected.command == "exit" {
 				return m, tea.Quit
