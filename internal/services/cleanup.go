@@ -173,7 +173,8 @@ func (s *CleanupService) findAllImageReferences() ([]ImageReference, error) {
 	var references []ImageReference
 
 	// Regex to match markdown image syntax: ![alt](.attachments/path/to/image.png)
-	imageRegex := regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)
+	// Also handles angle brackets: ![alt](<.attachments/path/to/image.png>)
+	imageRegex := regexp.MustCompile(`!\[([^\]]*)\]\(<?\s*([^)>]+?)\s*>?\)`)
 
 	walkFunc := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -199,7 +200,7 @@ func (s *CleanupService) findAllImageReferences() ([]ImageReference, error) {
 			matches := imageRegex.FindAllStringSubmatch(line, -1)
 			for _, match := range matches {
 				if len(match) > 2 {
-					imagePath := match[2]
+					imagePath := strings.TrimSpace(match[2])
 					// Only track .attachments images
 					if strings.Contains(imagePath, ".attachments") {
 						references = append(references, ImageReference{
@@ -305,9 +306,18 @@ func (s *CleanupService) updateFileReferences(filePath string, refs []ImageRefer
 	contentStr := string(content)
 	for _, ref := range refs {
 		// Create a regex to match this specific image reference
+		// Handle both with and without angle brackets
 		escapedPath := regexp.QuoteMeta(ref.ImagePath)
-		pattern := regexp.MustCompile(fmt.Sprintf(`!\[([^\]]*)\]\(%s\)`, escapedPath))
-		contentStr = pattern.ReplaceAllString(contentStr, fmt.Sprintf(`![$1](%s)`, relPath))
+		
+		// Try with angle brackets first
+		patternWithBrackets := regexp.MustCompile(fmt.Sprintf(`!\[([^\]]*)\]\(<\s*%s\s*>\)`, escapedPath))
+		if patternWithBrackets.MatchString(contentStr) {
+			contentStr = patternWithBrackets.ReplaceAllString(contentStr, fmt.Sprintf(`![$1](<%s>)`, relPath))
+		} else {
+			// Try without angle brackets
+			pattern := regexp.MustCompile(fmt.Sprintf(`!\[([^\]]*)\]\(%s\)`, escapedPath))
+			contentStr = pattern.ReplaceAllString(contentStr, fmt.Sprintf(`![$1](%s)`, relPath))
+		}
 	}
 
 	// Write back to file
