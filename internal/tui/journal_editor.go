@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/redjax/notetkr/internal/services"
+	"github.com/redjax/notetkr/internal/utils"
 )
 
 type EditorMode int
@@ -19,19 +21,20 @@ const (
 )
 
 type JournalEditorModel struct {
-	journalService *services.JournalService
-	date           time.Time
-	filePath       string
-	textarea       textarea.Model
-	mode           EditorMode
-	width          int
-	height         int
-	err            error
-	saved          bool
-	saveMsg        string
-	undoStack      []undoState
-	redoStack      []undoState
-	lastContent    string
+	journalService   *services.JournalService
+	date             time.Time
+	filePath         string
+	textarea         textarea.Model
+	mode             EditorMode
+	width            int
+	height           int
+	err              error
+	saved            bool
+	saveMsg          string
+	undoStack        []undoState
+	redoStack        []undoState
+	lastContent      string
+	clipboardHandler *utils.ClipboardImageHandler
 }
 
 var (
@@ -70,15 +73,19 @@ func NewJournalEditor(journalService *services.JournalService, date time.Time) J
 	ta.SetWidth(80)
 	ta.SetHeight(20)
 
+	clipboardHandler := utils.NewClipboardImageHandler()
+	_ = clipboardHandler.Initialize()
+
 	m := JournalEditorModel{
-		journalService: journalService,
-		date:           date,
-		textarea:       ta,
-		mode:           ModeNormal,
-		saved:          false,
-		undoStack:      []undoState{},
-		redoStack:      []undoState{},
-		lastContent:    "",
+		journalService:   journalService,
+		date:             date,
+		textarea:         ta,
+		mode:             ModeNormal,
+		saved:            false,
+		undoStack:        []undoState{},
+		redoStack:        []undoState{},
+		lastContent:      "",
+		clipboardHandler: clipboardHandler,
 	}
 
 	return m
@@ -287,6 +294,31 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.redo()
 				return m, nil
 
+			case "alt+v":
+				// Paste image from clipboard
+				m.saveMsg = "Checking clipboard for image..."
+
+				if m.clipboardHandler == nil {
+					m.saveMsg = "⚠ Clipboard handler not initialized"
+					return m, nil
+				}
+
+				hasImage := m.clipboardHandler.HasImage()
+				if hasImage {
+					// Handle image paste
+					m.saveMsg = "Image detected, saving..."
+					if err := m.pasteImage(); err != nil {
+						m.saveMsg = fmt.Sprintf("❌ Error: %v", err)
+					} else {
+						m.saveMsg = "✓ Image inserted successfully!"
+					}
+					return m, nil
+				}
+
+				// No image in clipboard
+				m.saveMsg = "❌ No image in clipboard"
+				return m, nil
+
 			case "ctrl+c":
 				return m, tea.Quit
 			}
@@ -460,6 +492,62 @@ func (m *JournalEditorModel) deleteLine() {
 	m.trackContentChange()
 }
 
+// pasteImage handles pasting an image from the clipboard
+func (m *JournalEditorModel) pasteImage() error {
+	if m.clipboardHandler == nil {
+		return fmt.Errorf("clipboard handler not initialized")
+	}
+
+	if m.filePath == "" {
+		return fmt.Errorf("cannot determine journal location for image attachment")
+	}
+
+	// For journals, use the journal's directory
+	journalDir := filepath.Dir(m.filePath)
+	journalName := strings.TrimSuffix(filepath.Base(m.filePath), filepath.Ext(m.filePath))
+
+	// Create .attachments/<journal-date>/ directory
+	attachmentsDir := filepath.Join(journalDir, ".attachments", journalName)
+	baseName := "image"
+
+	// Save the image and get the filename
+	filename, err := m.clipboardHandler.SaveClipboardImage(attachmentsDir, baseName)
+	if err != nil {
+		return err
+	}
+
+	// Create the relative path for the markdown link
+	relativePath := fmt.Sprintf(".attachments/%s/%s", journalName, filename)
+
+	// Insert the markdown image syntax at cursor position
+	imageMarkdown := fmt.Sprintf("![Pasted image](%s)", relativePath)
+
+	// Get current content and cursor position
+	content := m.textarea.Value()
+	lines := strings.Split(content, "\n")
+	lineInfo := m.textarea.LineInfo()
+	currentLine := m.textarea.Line()
+
+	// Calculate cursor position from line and column
+	cursorPos := 0
+	for i := 0; i < currentLine && i < len(lines); i++ {
+		cursorPos += len(lines[i]) + 1 // +1 for newline
+	}
+	cursorPos += lineInfo.ColumnOffset
+
+	// Insert the markdown at cursor position
+	newContent := content[:cursorPos] + imageMarkdown + content[cursorPos:]
+	m.textarea.SetValue(newContent)
+
+	// Move cursor after the inserted text
+	m.textarea.SetCursor(cursorPos + len(imageMarkdown))
+
+	// Track the change
+	m.trackContentChange()
+
+	return nil
+}
+
 func (m JournalEditorModel) View() string {
 	if m.err != nil {
 		return fmt.Sprintf("\n  Error: %v\n\n  Press 'esc' to go back\n", m.err)
@@ -497,9 +585,9 @@ func (m JournalEditorModel) View() string {
 	// Help - different based on mode
 	var help string
 	if m.mode == ModeNormal {
-		help = "hjkl: move • i/a: insert • d: delete line • 0/$: line start/end • g/G: top/bottom • ctrl+z/y: undo/redo • ctrl+s: save • q: back"
+		help = "hjkl: move • i/a/o: insert • d: delete line • 0/$: line start/end • g/G: top/bottom • ctrl+z/y: undo/redo • ctrl+s: save • q: back"
 	} else {
-		help = "esc: normal mode • ctrl+z/y: undo/redo • ctrl+s: save • ctrl+c: quit"
+		help = "esc: normal mode • ctrl+z/y: undo/redo • alt+v: paste image • ctrl+s: save • ctrl+c: quit"
 	}
 	b.WriteString(editorHelpStyle.Render(help))
 
