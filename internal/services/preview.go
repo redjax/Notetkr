@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -50,6 +51,13 @@ func (p *PreviewService) PreviewMarkdown(markdownPath, content string) error {
 
 // markdownToHTML converts markdown content to styled HTML
 func (p *PreviewService) markdownToHTML(markdown, sourcePath string) (string, error) {
+	// Strip YAML front matter if present
+	stripped := p.stripFrontMatter(markdown)
+
+	// Debug: write both original and stripped to temp files for comparison
+	_ = os.WriteFile(filepath.Join(os.TempDir(), "notetkr-debug-original.txt"), []byte(markdown), 0644)
+	_ = os.WriteFile(filepath.Join(os.TempDir(), "notetkr-debug-stripped.txt"), []byte(stripped), 0644)
+
 	// Configure goldmark with extensions
 	md := goldmark.New(
 		goldmark.WithExtensions(
@@ -69,7 +77,7 @@ func (p *PreviewService) markdownToHTML(markdown, sourcePath string) (string, er
 
 	// Convert markdown to HTML
 	var buf bytes.Buffer
-	if err := md.Convert([]byte(markdown), &buf); err != nil {
+	if err := md.Convert([]byte(stripped), &buf); err != nil {
 		return "", err
 	}
 
@@ -79,6 +87,68 @@ func (p *PreviewService) markdownToHTML(markdown, sourcePath string) (string, er
 	// Wrap in full HTML document with styling
 	html := p.wrapHTML(buf.String(), filepath.Base(sourcePath), sourceDir)
 	return html, nil
+}
+
+// stripFrontMatter removes YAML front matter from markdown content
+func (p *PreviewService) stripFrontMatter(content string) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 {
+		return content
+	}
+
+	// Check if first line is "---" (YAML front matter delimiter)
+	firstLine := strings.TrimSpace(lines[0])
+	if firstLine == "---" {
+		// Find the closing "---"
+		for i := 1; i < len(lines); i++ {
+			if strings.TrimSpace(lines[i]) == "---" {
+				// Found closing delimiter, return everything after it
+				if i+1 < len(lines) {
+					return strings.Join(lines[i+1:], "\n")
+				}
+				return ""
+			}
+		}
+		// No closing delimiter found, return original
+		return content
+	}
+
+	// Check if first line starts with "tags:" or "keywords:" (front matter without delimiters)
+	if !strings.HasPrefix(firstLine, "tags:") && !strings.HasPrefix(firstLine, "keywords:") {
+		// No front matter
+		return content
+	}
+
+	// Skip all lines that are front matter (tags:, keywords:, or continuation values)
+	startIdx := 0
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Empty line marks end of front matter
+		if trimmed == "" {
+			startIdx = i + 1
+			break
+		}
+
+		// Check if this is a front matter key (tags:, keywords:, etc.) or continuation
+		isFrontMatterKey := strings.HasPrefix(trimmed, "tags:") ||
+			strings.HasPrefix(trimmed, "keywords:") ||
+			strings.HasPrefix(trimmed, "attendees:")
+
+		// If it's not a front matter key and doesn't start with spaces/indentation,
+		// it's the start of actual content
+		if !isFrontMatterKey && i > 0 && !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") && trimmed != "" {
+			startIdx = i
+			break
+		}
+	}
+
+	// Return content without front matter
+	if startIdx > 0 && startIdx < len(lines) {
+		return strings.Join(lines[startIdx:], "\n")
+	}
+
+	return content
 }
 
 // wrapHTML wraps the markdown HTML in a complete HTML document with styling
