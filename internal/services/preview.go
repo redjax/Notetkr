@@ -54,10 +54,6 @@ func (p *PreviewService) markdownToHTML(markdown, sourcePath string) (string, er
 	// Strip YAML front matter if present
 	stripped := p.stripFrontMatter(markdown)
 
-	// Debug: write both original and stripped to temp files for comparison
-	_ = os.WriteFile(filepath.Join(os.TempDir(), "notetkr-debug-original.txt"), []byte(markdown), 0644)
-	_ = os.WriteFile(filepath.Join(os.TempDir(), "notetkr-debug-stripped.txt"), []byte(stripped), 0644)
-
 	// Configure goldmark with extensions
 	md := goldmark.New(
 		goldmark.WithExtensions(
