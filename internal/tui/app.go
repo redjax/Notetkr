@@ -4,6 +4,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/redjax/notetkr/internal/config"
 	"github.com/redjax/notetkr/internal/services"
 )
 
@@ -12,6 +13,7 @@ type AppModel struct {
 	currentView    tea.Model
 	journalService *services.JournalService
 	notesService   *services.NotesService
+	cfg            *config.Config
 	journalDir     string
 	notesDir       string
 	width          int
@@ -19,16 +21,17 @@ type AppModel struct {
 }
 
 // NewAppModel creates a new app model with dashboard as initial view
-func NewAppModel(journalDir, notesDir string) AppModel {
-	journalService := services.NewJournalService(journalDir)
-	notesService := services.NewNotesService(notesDir)
+func NewAppModel(cfg *config.Config) AppModel {
+	journalService := services.NewJournalService(cfg.JournalDir)
+	notesService := services.NewNotesService(cfg.NotesDir)
 
 	return AppModel{
 		currentView:    NewDashboard(),
 		journalService: journalService,
 		notesService:   notesService,
-		journalDir:     journalDir,
-		notesDir:       notesDir,
+		cfg:            cfg,
+		journalDir:     cfg.JournalDir,
+		notesDir:       cfg.NotesDir,
 	}
 }
 
@@ -124,6 +127,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "search":
 			// Open search browser
 			m.currentView = NewSearchBrowser(m.journalService, m.notesService, m.width, m.height)
+			return m, m.currentView.Init()
+		case "clean":
+			// Open clean menu
+			m.currentView = NewCleanMenuApp(m.cfg)
 			return m, m.currentView.Init()
 		}
 	case OpenJournalMsg:

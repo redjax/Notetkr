@@ -20,6 +20,11 @@ func NewJournalService(journalDir string) *JournalService {
 	}
 }
 
+// GetJournalDir returns the journal directory path
+func (j *JournalService) GetJournalDir() string {
+	return j.journalDir
+}
+
 // GetTodayJournalPath returns the path for today's journal entry
 func (j *JournalService) GetTodayJournalPath() string {
 	return j.GetJournalPathForDate(time.Now())

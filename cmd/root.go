@@ -50,6 +50,7 @@ func init() {
 	rootCmd.AddCommand(commands.NewExportCmd(func() *config.Config { return cfg }))
 	rootCmd.AddCommand(commands.NewImportCmd(func() *config.Config { return cfg }))
 	rootCmd.AddCommand(commands.NewSelfCmd(func() *config.Config { return cfg }))
+	rootCmd.AddCommand(commands.NewCleanCmd(func() *config.Config { return cfg }))
 
 	// Handle persistent flags
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
@@ -110,7 +111,7 @@ func runDashboard() {
 	ensureDataDirs()
 
 	// Create and run the dashboard TUI
-	app := tui.NewAppModel(cfg.JournalDir, cfg.NotesDir)
+	app := tui.NewAppModel(cfg)
 	p := tea.NewProgram(app, tea.WithAltScreen())
 
 	if _, err := p.Run(); err != nil {

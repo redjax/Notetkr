@@ -502,22 +502,20 @@ func (m *JournalEditorModel) pasteImage() error {
 		return fmt.Errorf("cannot determine journal location for image attachment")
 	}
 
-	// For journals, use the journal's directory
-	journalDir := filepath.Dir(m.filePath)
-	journalName := strings.TrimSuffix(filepath.Base(m.filePath), filepath.Ext(m.filePath))
+	// Get the journal directory
+	journalDir := m.journalService.GetJournalDir()
 
-	// Create .attachments/<journal-date>/ directory
-	attachmentsDir := filepath.Join(journalDir, ".attachments", journalName)
-	baseName := "image"
+	// Use a centralized .attachments/imgs directory
+	imgsDir := filepath.Join(journalDir, ".attachments", "imgs")
 
 	// Save the image and get the filename
-	filename, err := m.clipboardHandler.SaveClipboardImage(attachmentsDir, baseName)
+	filename, err := m.clipboardHandler.SaveClipboardImage(imgsDir, "image")
 	if err != nil {
 		return err
 	}
 
 	// Create the relative path for the markdown link
-	relativePath := fmt.Sprintf(".attachments/%s/%s", journalName, filename)
+	relativePath := fmt.Sprintf(".attachments/imgs/%s", filename)
 
 	// Insert the markdown image syntax at cursor position
 	// Use angle brackets to handle paths with spaces
