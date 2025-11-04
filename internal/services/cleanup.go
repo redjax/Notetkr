@@ -20,10 +20,10 @@ type CleanupService struct {
 
 // CleanupStats tracks cleanup statistics
 type CleanupStats struct {
-	UnusedImagesDeleted   int
+	UnusedImagesDeleted    int
 	DuplicateImagesDeleted int
-	ReferencesUpdated     int
-	BytesFreed            int64
+	ReferencesUpdated      int
+	BytesFreed             int64
 }
 
 // ImageReference tracks where an image is referenced
@@ -74,7 +74,7 @@ func (s *CleanupService) CleanImages() (*CleanupStats, error) {
 			if err == nil {
 				stats.BytesFreed += info.Size()
 			}
-			
+
 			if err := os.Remove(imgPath); err == nil {
 				stats.UnusedImagesDeleted++
 			}
@@ -120,7 +120,7 @@ func (s *CleanupService) CleanImages() (*CleanupStats, error) {
 		if err == nil {
 			stats.BytesFreed += info.Size()
 		}
-		
+
 		if err := os.Remove(duplicatePath); err == nil {
 			stats.DuplicateImagesDeleted++
 		}
