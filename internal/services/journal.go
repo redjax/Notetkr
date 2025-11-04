@@ -98,6 +98,11 @@ func (j *JournalService) CreateOrOpenJournal(date time.Time) (string, error) {
 	return journalPath, nil
 }
 
+// DeleteJournal deletes a journal file
+func (j *JournalService) DeleteJournal(filePath string) error {
+	return os.Remove(filePath)
+}
+
 // ReadJournal reads the contents of a journal file
 func (j *JournalService) ReadJournal(date time.Time) (string, error) {
 	journalPath := j.GetJournalPathForDate(date)

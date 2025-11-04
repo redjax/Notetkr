@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -299,6 +300,17 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			switch msg.String() {
 			case "q":
+				// Check if this is an empty new note that should be deleted
+				if m.isNewNote && m.isEmpty() {
+					// Delete the empty note file
+					if m.filePath != "" {
+						_ = m.notesService.DeleteNote(m.filePath)
+					}
+					return m, func() tea.Msg {
+						return BackToNotesBrowserMsg{}
+					}
+				}
+
 				// Check if there are unsaved changes
 				if m.hasUnsavedChanges() {
 					m.showQuitConfirm = true
@@ -338,11 +350,8 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Insert new line below cursor and enter insert mode (like vim)
 				m.mode = ModeInsert
 				m.textarea.Focus()
-				// Move to end of current line, then insert newline
-				m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnd})
-				m.textarea, cmd = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnter})
-				m.trackContentChange()
-				return m, tea.Batch(cmd, textarea.Blink)
+				// Use smart indentation
+				return m, tea.Batch(m.insertNewLineWithIndent(), textarea.Blink)
 
 			case "h":
 				m.textarea, cmd = m.textarea.Update(tea.KeyMsg{Type: tea.KeyLeft})
@@ -449,6 +458,10 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// No image in clipboard
 				m.saveMsg = "❌ No image in clipboard"
 				return m, nil
+
+			case "enter":
+				// Smart indentation for lists
+				return m, m.insertNewLineWithIndent()
 
 			default:
 				m.textarea, cmd = m.textarea.Update(msg)
@@ -674,6 +687,62 @@ func (m *NotesEditorModel) pasteImage() error {
 	m.trackContentChange()
 
 	return nil
+}
+
+// isEmpty checks if the note content is effectively empty (only whitespace or unchanged from initial)
+func (m *NotesEditorModel) isEmpty() bool {
+	content := strings.TrimSpace(m.textarea.Value())
+	initialContent := strings.TrimSpace(m.initialContent)
+
+	// Empty if no content or content matches initial template
+	return content == "" || content == initialContent
+}
+
+// getCurrentLineIndentAndPrefix returns the indentation and list prefix of the current line
+func (m *NotesEditorModel) getCurrentLineIndentAndPrefix() (string, string) {
+	content := m.textarea.Value()
+	lines := strings.Split(content, "\n")
+	currentLineNum := m.textarea.Line()
+
+	if currentLineNum >= len(lines) {
+		return "", ""
+	}
+
+	currentLine := lines[currentLineNum]
+
+	// Match leading whitespace
+	indentRegex := regexp.MustCompile(`^(\s*)`)
+	indentMatch := indentRegex.FindString(currentLine)
+
+	// Match list markers: -, *, +, or numbered lists (1., 2., etc.)
+	listRegex := regexp.MustCompile(`^(\s*)([-*+]|\d+\.)\s`)
+	if listMatch := listRegex.FindStringSubmatch(currentLine); len(listMatch) >= 3 {
+		return listMatch[1], listMatch[2] + " "
+	}
+
+	// No list marker, just return indentation
+	return indentMatch, ""
+}
+
+// insertNewLineWithIndent inserts a new line preserving indentation and list markers
+func (m *NotesEditorModel) insertNewLineWithIndent() tea.Cmd {
+	indent, listPrefix := m.getCurrentLineIndentAndPrefix()
+
+	// Move to end of line and insert newline
+	m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	var cmd tea.Cmd
+	m.textarea, cmd = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	// If there was indentation or a list marker, insert it
+	if indent != "" || listPrefix != "" {
+		prefix := indent + listPrefix
+		for _, r := range prefix {
+			m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		}
+	}
+
+	m.trackContentChange()
+	return cmd
 }
 
 func (m NotesEditorModel) View() string {
