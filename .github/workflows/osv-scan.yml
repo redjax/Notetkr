@@ -59,6 +59,8 @@ jobs:
         if: always()
         with:
           sarif_file: osv-results.sarif
+          category: osv-scan
+          wait-for-processing: true
 
       - name: Upload OSV-Scanner Results (All Formats)
         uses: actions/upload-artifact@v4
