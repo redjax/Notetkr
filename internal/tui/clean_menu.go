@@ -23,16 +23,19 @@ var (
 
 // CleanMenuApp represents the clean menu TUI
 type CleanMenuApp struct {
-	cfg            *config.Config
-	cursor         int
-	selected       int
-	options        []cleanOption
-	cleanupService *services.CleanupService
-	spinner        spinner.Model
-	running        bool
-	done           bool
-	stats          *services.CleanupStats
-	err            error
+	cfg             *config.Config
+	cursor          int
+	selected        int
+	options         []cleanOption
+	cleanupService  *services.CleanupService
+	spinner         spinner.Model
+	running         bool
+	done            bool
+	cleanupType     string // "images", "notes", or "journals"
+	stats           *services.CleanupStats
+	notesDeleted    int
+	journalsDeleted int
+	err             error
 }
 
 type cleanOption struct {
@@ -57,6 +60,16 @@ func NewCleanMenuApp(cfg *config.Config) *CleanMenuApp {
 				name:        "Clean Images",
 				description: "Remove unused images and deduplicate duplicates",
 				command:     "images",
+			},
+			{
+				name:        "Clean Empty Notes",
+				description: "Remove notes that only contain the default template",
+				command:     "notes",
+			},
+			{
+				name:        "Clean Empty Journals",
+				description: "Remove journal entries that only contain the default template",
+				command:     "journals",
 			},
 			{
 				name:        "Exit",
@@ -113,11 +126,30 @@ func (m *CleanMenuApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			if selected.command == "images" {
-				// Start the cleanup
+				// Start the image cleanup
 				m.running = true
+				m.cleanupType = "images"
 				return m, tea.Batch(
 					m.spinner.Tick,
-					m.runCleanup,
+					m.runImageCleanup,
+				)
+			}
+			if selected.command == "notes" {
+				// Start the notes cleanup
+				m.running = true
+				m.cleanupType = "notes"
+				return m, tea.Batch(
+					m.spinner.Tick,
+					m.runNotesCleanup,
+				)
+			}
+			if selected.command == "journals" {
+				// Start the journals cleanup
+				m.running = true
+				m.cleanupType = "journals"
+				return m, tea.Batch(
+					m.spinner.Tick,
+					m.runJournalsCleanup,
 				)
 			}
 		}
@@ -126,6 +158,8 @@ func (m *CleanMenuApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.running = false
 		m.done = true
 		m.stats = msg.stats
+		m.notesDeleted = msg.notesDeleted
+		m.journalsDeleted = msg.journalsDeleted
 		m.err = msg.err
 		return m, nil
 
@@ -140,22 +174,35 @@ func (m *CleanMenuApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *CleanMenuApp) runCleanup() tea.Msg {
-	stats, err := m.cleanupService.CleanImages()
-	return cleanupCompleteMsg{stats: stats, err: err}
-}
-
 func (m *CleanMenuApp) View() string {
 	// If cleanup is done, show results
 	if m.done {
-		s := titleStyle.Render("🧹 Image Cleanup") + "\n\n"
+		title := "🧹 Cleanup Complete"
+		switch m.cleanupType {
+		case "images":
+			title = "🧹 Image Cleanup"
+		case "notes":
+			title = "🧹 Notes Cleanup"
+		case "journals":
+			title = "🧹 Journals Cleanup"
+		}
+		s := titleStyle.Render(title) + "\n\n"
 
 		if m.err != nil {
 			s += errorStyle.Render("❌ Cleanup failed!") + "\n\n"
 			s += statusStyle.Render(fmt.Sprintf("Error: %v", m.err)) + "\n"
 		} else {
 			s += successStyle.Render("✓ Cleanup completed successfully!") + "\n\n"
-			s += renderStats(m.stats)
+
+			// Display results based on cleanup type
+			switch m.cleanupType {
+			case "images":
+				s += renderStats(m.stats)
+			case "notes":
+				s += statusStyle.Render(fmt.Sprintf("Deleted %d empty note(s)", m.notesDeleted))
+			case "journals":
+				s += statusStyle.Render(fmt.Sprintf("Deleted %d empty journal(s)", m.journalsDeleted))
+			}
 		}
 		s += "\n" + helpStyle.Render("press any key to exit")
 		return s
@@ -163,8 +210,22 @@ func (m *CleanMenuApp) View() string {
 
 	// If cleanup is running, show spinner
 	if m.running {
-		s := titleStyle.Render("🧹 Image Cleanup") + "\n\n"
-		s += fmt.Sprintf("%s %s\n\n", m.spinner.View(), statusStyle.Render("Cleaning up images..."))
+		title := "🧹 Running Cleanup"
+		message := "Cleaning up..."
+		switch m.cleanupType {
+		case "images":
+			title = "🧹 Image Cleanup"
+			message = "Cleaning up images..."
+		case "notes":
+			title = "🧹 Notes Cleanup"
+			message = "Cleaning up empty notes..."
+		case "journals":
+			title = "🧹 Journals Cleanup"
+			message = "Cleaning up empty journals..."
+		}
+
+		s := titleStyle.Render(title) + "\n\n"
+		s += fmt.Sprintf("%s %s\n\n", m.spinner.View(), statusStyle.Render(message))
 		s += statusStyle.Render("Please wait...") + "\n\n"
 		s += helpStyle.Render("ctrl+c: cancel")
 		return s
@@ -198,4 +259,19 @@ func (m *CleanMenuApp) View() string {
 	s += "\n" + helpStyle.Render("↑/↓: navigate • enter: select • q/esc: quit")
 
 	return s
+}
+
+func (m *CleanMenuApp) runImageCleanup() tea.Msg {
+	stats, err := m.cleanupService.CleanImages()
+	return cleanupCompleteMsg{stats: stats, err: err}
+}
+
+func (m *CleanMenuApp) runNotesCleanup() tea.Msg {
+	deleted, err := m.cleanupService.CleanEmptyNotes()
+	return cleanupCompleteMsg{notesDeleted: deleted, err: err}
+}
+
+func (m *CleanMenuApp) runJournalsCleanup() tea.Msg {
+	deleted, err := m.cleanupService.CleanEmptyJournals()
+	return cleanupCompleteMsg{journalsDeleted: deleted, err: err}
 }

@@ -27,8 +27,10 @@ type CleanImagesApp struct {
 }
 
 type cleanupCompleteMsg struct {
-	stats *services.CleanupStats
-	err   error
+	stats           *services.CleanupStats
+	notesDeleted    int
+	journalsDeleted int
+	err             error
 }
 
 // NewCleanImagesApp creates a new image cleanup app
