@@ -463,6 +463,16 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Smart indentation for lists
 				return m, m.insertNewLineWithIndent()
 
+			case "tab":
+				// Indent current line
+				m.indentCurrentLine()
+				return m, nil
+
+			case "shift+tab":
+				// Unindent current line
+				m.unindentCurrentLine()
+				return m, nil
+
 			default:
 				m.textarea, cmd = m.textarea.Update(msg)
 				return m, cmd
@@ -726,6 +736,30 @@ func (m *NotesEditorModel) getCurrentLineIndentAndPrefix() (string, string) {
 
 // insertNewLineWithIndent inserts a new line preserving indentation and list markers
 func (m *NotesEditorModel) insertNewLineWithIndent() tea.Cmd {
+	// Check if current line is an empty list item (just "- " or similar with no text)
+	content := m.textarea.Value()
+	lines := strings.Split(content, "\n")
+	currentLineNum := m.textarea.Line()
+
+	if currentLineNum < len(lines) {
+		currentLine := lines[currentLineNum]
+		// Match empty list items: optional whitespace, list marker, optional space, then end of line
+		emptyListRegex := regexp.MustCompile(`^\s*[-*+]\s*$`)
+		if emptyListRegex.MatchString(currentLine) {
+			// Remove the empty list marker and exit list
+			lines[currentLineNum] = ""
+			newContent := strings.Join(lines, "\n")
+			m.textarea.SetValue(newContent)
+
+			// Move cursor to end of now-empty line and insert newline
+			m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnd})
+			var cmd tea.Cmd
+			m.textarea, cmd = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnter})
+			m.trackContentChange()
+			return cmd
+		}
+	}
+
 	indent, listPrefix := m.getCurrentLineIndentAndPrefix()
 
 	// Move to end of line and insert newline
@@ -743,6 +777,81 @@ func (m *NotesEditorModel) insertNewLineWithIndent() tea.Cmd {
 
 	m.trackContentChange()
 	return cmd
+}
+
+// indentCurrentLine adds indentation to the current line (for Tab key)
+func (m *NotesEditorModel) indentCurrentLine() {
+	content := m.textarea.Value()
+	lines := strings.Split(content, "\n")
+	currentLineNum := m.textarea.Line()
+	lineInfo := m.textarea.LineInfo()
+
+	if currentLineNum >= len(lines) {
+		return
+	}
+
+	currentLine := lines[currentLineNum]
+
+	// Add two spaces of indentation at the start of the line
+	lines[currentLineNum] = "  " + currentLine
+	newContent := strings.Join(lines, "\n")
+	m.textarea.SetValue(newContent)
+
+	// Move cursor to maintain relative position (add 2 for the new spaces)
+	newPos := 0
+	for i := 0; i < currentLineNum; i++ {
+		newPos += len(lines[i]) + 1 // +1 for newline
+	}
+	newPos += lineInfo.ColumnOffset + 2
+	m.textarea.SetCursor(newPos)
+
+	m.trackContentChange()
+}
+
+// unindentCurrentLine removes indentation from the current line (for Shift+Tab)
+func (m *NotesEditorModel) unindentCurrentLine() {
+	content := m.textarea.Value()
+	lines := strings.Split(content, "\n")
+	currentLineNum := m.textarea.Line()
+	lineInfo := m.textarea.LineInfo()
+
+	if currentLineNum >= len(lines) {
+		return
+	}
+
+	currentLine := lines[currentLineNum]
+
+	// Remove up to 2 spaces from the start of the line
+	removed := 0
+	if strings.HasPrefix(currentLine, "  ") {
+		lines[currentLineNum] = currentLine[2:]
+		removed = 2
+	} else if strings.HasPrefix(currentLine, " ") {
+		lines[currentLineNum] = currentLine[1:]
+		removed = 1
+	} else if strings.HasPrefix(currentLine, "\t") {
+		lines[currentLineNum] = currentLine[1:]
+		removed = 1
+	} else {
+		// No indentation to remove
+		return
+	}
+
+	newContent := strings.Join(lines, "\n")
+	m.textarea.SetValue(newContent)
+
+	// Move cursor to maintain relative position (subtract removed spaces)
+	newPos := 0
+	for i := 0; i < currentLineNum; i++ {
+		newPos += len(lines[i]) + 1 // +1 for newline
+	}
+	newPos += lineInfo.ColumnOffset - removed
+	if newPos < 0 {
+		newPos = 0
+	}
+	m.textarea.SetCursor(newPos)
+
+	m.trackContentChange()
 }
 
 func (m NotesEditorModel) View() string {
