@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -97,6 +98,36 @@ func NewJournalEditor(journalService *services.JournalService, date time.Time) J
 	return m
 }
 
+// NewJournalEditorWithFilename creates a new journal editor with a custom filepath
+func NewJournalEditorWithFilename(journalService *services.JournalService, filepath string) JournalEditorModel {
+	ta := textarea.New()
+	ta.Placeholder = "Press 'i' to enter insert mode and start writing..."
+	ta.Focus()
+	ta.CharLimit = 0
+	ta.ShowLineNumbers = false
+	ta.SetWidth(80)
+	ta.SetHeight(20)
+
+	clipboardHandler := utils.NewClipboardImageHandler()
+	_ = clipboardHandler.Initialize()
+
+	m := JournalEditorModel{
+		journalService:   journalService,
+		filePath:         filepath,
+		textarea:         ta,
+		mode:             ModeNormal,
+		saved:            false,
+		undoStack:        []undoState{},
+		redoStack:        []undoState{},
+		lastContent:      "",
+		clipboardHandler: clipboardHandler,
+		previewService:   services.NewPreviewService(),
+		wasJustCreated:   true, // Mark as newly created
+	}
+
+	return m
+}
+
 func (m JournalEditorModel) Init() tea.Cmd {
 	return tea.Batch(
 		textarea.Blink,
@@ -105,26 +136,76 @@ func (m JournalEditorModel) Init() tea.Cmd {
 }
 
 func (m JournalEditorModel) loadJournal() tea.Msg {
-	filePath, wasCreated, err := m.journalService.CreateOrOpenJournal(m.date)
-	if err != nil {
-		return JournalEditorErrorMsg{err: err}
-	}
+	var content string
+	var err error
+	var wasCreated bool
 
-	content, err := m.journalService.ReadJournal(m.date)
-	if err != nil {
-		return JournalEditorErrorMsg{err: err}
+	// If we have a custom filepath, use it directly
+	if m.filePath != "" {
+		// Create the file with default template if it doesn't exist
+		content, err = m.createOrReadCustomJournal()
+		if err != nil {
+			return JournalEditorErrorMsg{err: err}
+		}
+		wasCreated = true
+	} else {
+		// Use the date-based journal
+		filePath, created, err := m.journalService.CreateOrOpenJournal(m.date)
+		if err != nil {
+			return JournalEditorErrorMsg{err: err}
+		}
+		m.filePath = filePath
+		wasCreated = created
+
+		content, err = m.journalService.ReadJournal(m.date)
+		if err != nil {
+			return JournalEditorErrorMsg{err: err}
+		}
 	}
 
 	return JournalEditorLoadedMsg{
-		filePath:   filePath,
+		filePath:   m.filePath,
 		content:    content,
 		wasCreated: wasCreated,
 	}
 }
 
+// createOrReadCustomJournal creates or reads a custom-named journal file
+func (m JournalEditorModel) createOrReadCustomJournal() (string, error) {
+	// Check if file exists
+	content, err := os.ReadFile(m.filePath)
+	if err == nil {
+		return string(content), nil
+	}
+
+	// File doesn't exist, create it with default template
+	template := fmt.Sprintf("# Journal Entry\n\n## Tasks\n\n- \n")
+
+	// Ensure directory exists
+	dir := filepath.Dir(m.filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+
+	// Create the file
+	if err := os.WriteFile(m.filePath, []byte(template), 0644); err != nil {
+		return "", err
+	}
+
+	return template, nil
+}
+
 func (m JournalEditorModel) saveJournal() tea.Msg {
 	content := m.textarea.Value()
-	err := m.journalService.WriteJournal(m.date, content)
+
+	var err error
+	// If we have a custom filepath, write directly to it
+	if m.date.IsZero() {
+		err = os.WriteFile(m.filePath, []byte(content), 0644)
+	} else {
+		err = m.journalService.WriteJournal(m.date, content)
+	}
+
 	if err != nil {
 		return JournalEditorErrorMsg{err: err}
 	}
@@ -634,8 +715,7 @@ func (m *JournalEditorModel) insertNewLineWithIndent() tea.Cmd {
 
 	// Move to end of line and insert newline
 	m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnd})
-	var cmd tea.Cmd
-	m.textarea, cmd = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
 	// If there was indentation or a list marker, insert it
 	if indent != "" || listPrefix != "" {
@@ -646,7 +726,7 @@ func (m *JournalEditorModel) insertNewLineWithIndent() tea.Cmd {
 	}
 
 	m.trackContentChange()
-	return cmd
+	return textarea.Blink
 }
 
 // indentCurrentLine adds indentation to the current line (for Tab key)
