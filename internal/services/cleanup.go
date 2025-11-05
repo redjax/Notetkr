@@ -323,3 +323,132 @@ func (s *CleanupService) updateFileReferences(filePath string, refs []ImageRefer
 	// Write back to file
 	return os.WriteFile(filePath, []byte(contentStr), 0644)
 }
+
+// CleanEmptyNotes removes notes that only contain the default template
+func (s *CleanupService) CleanEmptyNotes() (int, error) {
+	deleted := 0
+
+	// Walk through all notes
+	err := filepath.Walk(s.notesDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip directories and non-markdown files
+		if info.IsDir() || !strings.HasSuffix(info.Name(), ".md") {
+			return nil
+		}
+
+		// Skip template directory
+		if strings.Contains(path, ".templates") {
+			return filepath.SkipDir
+		}
+
+		// Read the file
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil // Skip files we can't read
+		}
+
+		// Check if it matches the default template
+		if s.isDefaultNoteTemplate(string(content), info.Name()) {
+			if err := os.Remove(path); err == nil {
+				deleted++
+			}
+		}
+
+		return nil
+	})
+
+	return deleted, err
+}
+
+// CleanEmptyJournals removes journal entries that only contain the default template
+func (s *CleanupService) CleanEmptyJournals() (int, error) {
+	deleted := 0
+
+	// Walk through all journals
+	err := filepath.Walk(s.journalDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip directories and non-markdown files
+		if info.IsDir() || !strings.HasSuffix(info.Name(), ".md") {
+			return nil
+		}
+
+		// Read the file
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil // Skip files we can't read
+		}
+
+		// Check if it matches the default template
+		if s.isDefaultJournalTemplate(string(content)) {
+			if err := os.Remove(path); err == nil {
+				deleted++
+			}
+		}
+
+		return nil
+	})
+
+	return deleted, err
+}
+
+// isDefaultNoteTemplate checks if content matches the default note template
+func (s *CleanupService) isDefaultNoteTemplate(content, filename string) bool {
+	// The default template is just the frontmatter and an empty heading
+	defaultTemplate := "---\ntags:\nkeywords:\n---\n\n# \n"
+
+	// Compare trimmed content
+	return strings.TrimSpace(content) == strings.TrimSpace(defaultTemplate)
+}
+
+// isDefaultJournalTemplate checks if content matches the default journal template
+func (s *CleanupService) isDefaultJournalTemplate(content string) bool {
+	// Journal template pattern: "# Journal Entry - [Date]\n\n## Tasks\n\n- \n"
+	// We can't match exact date, so check the pattern
+	lines := strings.Split(strings.TrimSpace(content), "\n")
+
+	if len(lines) < 5 {
+		return false
+	}
+
+	// Check pattern:
+	// Line 0: # Journal Entry - [some date]
+	// Line 1: empty
+	// Line 2: ## Tasks
+	// Line 3: empty
+	// Line 4: -
+
+	if !strings.HasPrefix(lines[0], "# Journal Entry - ") {
+		return false
+	}
+
+	if strings.TrimSpace(lines[1]) != "" {
+		return false
+	}
+
+	if strings.TrimSpace(lines[2]) != "## Tasks" {
+		return false
+	}
+
+	if strings.TrimSpace(lines[3]) != "" {
+		return false
+	}
+
+	if strings.TrimSpace(lines[4]) != "-" {
+		return false
+	}
+
+	// If there are more lines, they should all be empty
+	for i := 5; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) != "" {
+			return false
+		}
+	}
+
+	return true
+}

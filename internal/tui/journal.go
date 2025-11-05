@@ -43,7 +43,7 @@ func (m JournalModel) Init() tea.Cmd {
 }
 
 func (m JournalModel) loadJournal() tea.Msg {
-	filePath, err := m.journalService.CreateOrOpenJournal(m.date)
+	filePath, _, err := m.journalService.CreateOrOpenJournal(m.date)
 	if err != nil {
 		return JournalErrorMsg{err: err}
 	}

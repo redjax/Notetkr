@@ -79,9 +79,10 @@ func (j *JournalService) EnsureJournalDirExists(date time.Time) error {
 }
 
 // CreateOrOpenJournal creates or opens today's journal file
-func (j *JournalService) CreateOrOpenJournal(date time.Time) (string, error) {
+// Returns (journalPath, wasCreated, error)
+func (j *JournalService) CreateOrOpenJournal(date time.Time) (string, bool, error) {
 	if err := j.EnsureJournalDirExists(date); err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	journalPath := j.GetJournalPathForDate(date)
@@ -91,11 +92,12 @@ func (j *JournalService) CreateOrOpenJournal(date time.Time) (string, error) {
 		// Create new journal entry with header
 		header := fmt.Sprintf("# Journal Entry - %s\n\n## Tasks\n\n- \n", date.Format("Monday, January 2, 2006"))
 		if err := os.WriteFile(journalPath, []byte(header), 0644); err != nil {
-			return "", fmt.Errorf("failed to create journal file: %w", err)
+			return "", false, fmt.Errorf("failed to create journal file: %w", err)
 		}
+		return journalPath, true, nil // Was newly created
 	}
 
-	return journalPath, nil
+	return journalPath, false, nil // Already existed
 }
 
 // DeleteJournal deletes a journal file

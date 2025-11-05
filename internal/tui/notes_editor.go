@@ -32,6 +32,7 @@ type NotesEditorModel struct {
 	saved            bool
 	err              error
 	isNewNote        bool
+	wasJustCreated   bool // Track if this note was created in this session
 	noteName         string
 	undoStack        []undoState
 	redoStack        []undoState
@@ -218,6 +219,14 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case NotesSavedMsg:
 		m.saved = true
 		m.saveMsg = "✓ Saved"
+
+		// Only clear wasJustCreated if user actually made changes from the template
+		currentContent := strings.TrimSpace(m.textarea.Value())
+		initialTemplate := strings.TrimSpace(m.initialContent)
+		if currentContent != initialTemplate {
+			m.wasJustCreated = false // User made real changes
+		}
+
 		m.initialContent = m.textarea.Value()
 		return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
 			return ClearSaveMsg{}
@@ -260,6 +269,7 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				// Switch to normal editor mode
 				m.isNewNote = false
+				m.wasJustCreated = true // Mark that this note was just created
 				m.filePath = filePath
 				m.noteName = noteName
 				m.mode = ModeNormal
@@ -300,8 +310,8 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			switch msg.String() {
 			case "q":
-				// Check if this is an empty new note that should be deleted
-				if m.isNewNote && m.isEmpty() {
+				// Check if this is a newly created note (in this session) that is still empty/unchanged
+				if m.wasJustCreated && m.isEmpty() {
 					// Delete the empty note file
 					if m.filePath != "" {
 						_ = m.notesService.DeleteNote(m.filePath)

@@ -38,6 +38,7 @@ type JournalEditorModel struct {
 	clipboardHandler *utils.ClipboardImageHandler
 	showQuitConfirm  bool
 	initialContent   string
+	wasJustCreated   bool // Track if this journal was created in this session
 	previewService   *services.PreviewService
 }
 
@@ -104,7 +105,7 @@ func (m JournalEditorModel) Init() tea.Cmd {
 }
 
 func (m JournalEditorModel) loadJournal() tea.Msg {
-	filePath, err := m.journalService.CreateOrOpenJournal(m.date)
+	filePath, wasCreated, err := m.journalService.CreateOrOpenJournal(m.date)
 	if err != nil {
 		return JournalEditorErrorMsg{err: err}
 	}
@@ -115,8 +116,9 @@ func (m JournalEditorModel) loadJournal() tea.Msg {
 	}
 
 	return JournalEditorLoadedMsg{
-		filePath: filePath,
-		content:  content,
+		filePath:   filePath,
+		content:    content,
+		wasCreated: wasCreated,
 	}
 }
 
@@ -145,6 +147,7 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case JournalEditorLoadedMsg:
 		m.filePath = msg.filePath
 		m.textarea.SetValue(msg.content)
+		m.wasJustCreated = msg.wasCreated // Track if this was newly created
 		// Reset cursor to start of document
 		m.textarea.CursorStart()
 		// Initialize undo stack with the loaded content
@@ -161,6 +164,14 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saved = true
 		m.saveMsg = "✓ Saved"
 		m.err = nil
+
+		// Only clear wasJustCreated if user actually made changes from the template
+		currentContent := strings.TrimSpace(m.textarea.Value())
+		initialTemplate := strings.TrimSpace(m.initialContent)
+		if currentContent != initialTemplate {
+			m.wasJustCreated = false // User made real changes
+		}
+
 		m.initialContent = m.textarea.Value()
 		// Clear save message after 2 seconds
 		return m, tea.Tick(time.Second*2, func(t time.Time) tea.Msg {
@@ -195,8 +206,8 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 
 			case "q":
-				// Check if this is an empty journal that should be deleted
-				if m.isEmpty() {
+				// Check if this is a newly created journal (in this session) that is still empty/unchanged
+				if m.wasJustCreated && m.isEmpty() {
 					// Delete the empty journal file
 					if m.filePath != "" {
 						_ = m.journalService.DeleteJournal(m.filePath)
@@ -834,8 +845,9 @@ func (m JournalEditorModel) View() string {
 }
 
 type JournalEditorLoadedMsg struct {
-	filePath string
-	content  string
+	filePath   string
+	content    string
+	wasCreated bool
 }
 
 type JournalEditorErrorMsg struct {

@@ -1,7 +1,6 @@
 package services
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -446,7 +445,8 @@ func (s *NotesService) CreateNote(name string) (string, error) {
 		defer file.Close()
 
 		// Write initial template with proper YAML frontmatter
-		template := fmt.Sprintf("---\ntags:\nkeywords:\n---\n\n# %s\n\n", strings.TrimSuffix(name, ".md"))
+		// Don't auto-fill the title - let user add it if they want
+		template := "---\ntags:\nkeywords:\n---\n\n# \n\n"
 		_, err = file.WriteString(template)
 		if err != nil {
 			return "", err
