@@ -88,8 +88,13 @@ func (m JournalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Return to dashboard
 			return NewDashboard(), nil
 
+		case "n":
+			// Open today's journal in built-in editor
+			editor := NewJournalEditor(m.journalService, m.date)
+			return editor, editor.Init()
+
 		case "e":
-			// Open in editor
+			// Open in external editor
 			return m, m.openInEditor
 
 		case "r":
@@ -151,7 +156,7 @@ func (m JournalModel) View() string {
 	s += contentStyle.Render(m.content) + "\n\n"
 
 	// Help
-	s += helpStyle.Render("e: edit in $EDITOR • r: reload • g: weekly summary • esc: back to dashboard • q: quit")
+	s += helpStyle.Render("n: edit in TUI • e: edit in $EDITOR • r: reload • g: weekly summary • esc: back • q: quit")
 
 	return s
 }

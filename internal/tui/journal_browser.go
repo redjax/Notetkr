@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/redjax/notetkr/internal/services"
@@ -25,6 +26,8 @@ type JournalBrowserModel struct {
 	confirmDelete    bool
 	deleteTarget     string
 	deleteTargetPath string
+	creatingNew      bool
+	nameInput        textinput.Model
 }
 
 var (
@@ -57,6 +60,11 @@ var (
 )
 
 func NewJournalBrowser(journalService *services.JournalService, journalDir string, width, height int) JournalBrowserModel {
+	nameInput := textinput.New()
+	nameInput.Placeholder = "Enter journal filename (e.g., 2025-11-05)..."
+	nameInput.CharLimit = 100
+	nameInput.Width = 50
+
 	m := JournalBrowserModel{
 		journalService: journalService,
 		journalDir:     journalDir,
@@ -64,6 +72,7 @@ func NewJournalBrowser(journalService *services.JournalService, journalDir strin
 		cursor:         0,
 		width:          width,
 		height:         height,
+		nameInput:      nameInput,
 	}
 	m.loadItems()
 	return m
@@ -130,6 +139,49 @@ func (m JournalBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Handle filename input for new journal
+		if m.creatingNew {
+			switch msg.String() {
+			case "esc":
+				m.creatingNew = false
+				m.nameInput.Blur()
+				m.nameInput.SetValue("")
+				return m, nil
+
+			case "enter":
+				filename := strings.TrimSpace(m.nameInput.Value())
+				if filename == "" {
+					return m, nil
+				}
+
+				// Ensure .md extension
+				if !strings.HasSuffix(filename, ".md") {
+					filename = filename + ".md"
+				}
+
+				m.creatingNew = false
+				m.nameInput.Blur()
+				m.nameInput.SetValue("")
+
+				// Build the full path including breadcrumb
+				currentPath := m.journalDir
+				for _, part := range m.breadcrumb {
+					currentPath = filepath.Join(currentPath, part)
+				}
+				fullPath := filepath.Join(currentPath, filename)
+
+				// Return message to create and open the journal with this filepath
+				return m, func() tea.Msg {
+					return CreateJournalWithNameMsg{filepath: fullPath}
+				}
+
+			default:
+				var cmd tea.Cmd
+				m.nameInput, cmd = m.nameInput.Update(msg)
+				return m, cmd
+			}
+		}
+
 		// Handle delete confirmation
 		if m.confirmDelete {
 			switch msg.String() {
@@ -158,6 +210,12 @@ func (m JournalBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
+
+		case "n":
+			// Show filename input for new journal
+			m.creatingNew = true
+			m.nameInput.Focus()
+			return m, textinput.Blink
 
 		case "esc", "h", "left":
 			// Go back/up one level
@@ -294,6 +352,16 @@ func (m JournalBrowserModel) View() string {
 	}
 	s += "\n"
 
+	// Show filename input if creating new journal
+	if m.creatingNew {
+		inputBox := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("170")).
+			Padding(1, 2).
+			Render("📝 New Journal Entry\n\n" + m.nameInput.View() + "\n\nEnter: create • Esc: cancel")
+		s += inputBox + "\n\n"
+	}
+
 	// Show confirmation dialog if delete is pending
 	if m.confirmDelete {
 		dialogText := confirmTextStyle.Render(fmt.Sprintf("Delete '%s'?", m.deleteTarget)) + "\n\n"
@@ -315,7 +383,7 @@ func (m JournalBrowserModel) View() string {
 		}
 	}
 
-	s += "\n" + helpStyle.Render("↑/k: up • ↓/j: down • enter/l: open • esc/h: back • g: weekly summary • d: delete • q: quit")
+	s += "\n" + helpStyle.Render("n: new entry • ↑/k: up • ↓/j: down • enter/l: open • esc/h: back • g: weekly summary • d: delete • q: quit")
 
 	// Fill the screen
 	if m.width > 0 && m.height > 0 {
@@ -330,6 +398,14 @@ func (m JournalBrowserModel) View() string {
 
 type OpenJournalMsg struct {
 	date time.Time
+}
+
+type OpenJournalEditorMsg struct {
+	date time.Time
+}
+
+type CreateJournalWithNameMsg struct {
+	filepath string
 }
 
 type BackToJournalBrowserMsg struct{}

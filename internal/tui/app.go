@@ -141,6 +141,22 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 		}
 		return m, tea.Batch(cmd, m.currentView.Init())
+	case OpenJournalEditorMsg:
+		// Open journal editor for specific date
+		m.currentView = NewJournalEditor(m.journalService, msg.date)
+		// Send window size to new view
+		if m.width > 0 && m.height > 0 {
+			m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		}
+		return m, tea.Batch(cmd, m.currentView.Init())
+	case CreateJournalWithNameMsg:
+		// Create new journal with custom filepath
+		m.currentView = NewJournalEditorWithFilename(m.journalService, msg.filepath)
+		// Send window size to new view
+		if m.width > 0 && m.height > 0 {
+			m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		}
+		return m, tea.Batch(cmd, m.currentView.Init())
 	case OpenNoteMsg:
 		// Open specific note in editor
 		m.currentView = NewNotesEditor(m.notesService, msg.filePath)
