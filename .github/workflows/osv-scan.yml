@@ -39,6 +39,21 @@ jobs:
         run: osv-scanner --format=markdown --output=osv-results.md ./
         continue-on-error: true
 
+      - name: List generated files (debug)
+        if: always()
+        run: |
+          echo "=== Files in current directory ==="
+          ls -lah osv-results.* || echo "No osv-results files found"
+          echo ""
+          echo "=== File contents preview ==="
+          for f in osv-results.*; do
+            if [ -f "$f" ]; then
+              echo "--- $f (first 20 lines) ---"
+              head -20 "$f"
+              echo ""
+            fi
+          done
+
       - name: Upload SARIF results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
