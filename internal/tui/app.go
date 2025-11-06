@@ -175,7 +175,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmd, m.currentView.Init())
 	case CreateNoteFromTemplateMsg:
 		// Create new note from template
-		m.currentView = NewNotesEditorForNewWithTemplate(m.notesService, msg.templatePath)
+		m.currentView = NewNotesEditorForNewWithTemplate(m.notesService, msg.templatePath, msg.targetPath)
 		// Send window size to new view
 		if m.width > 0 && m.height > 0 {
 			m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})

@@ -24,6 +24,7 @@ type NotesEditorModel struct {
 	notesService     *services.NotesService
 	filePath         string
 	templatePath     string
+	targetPath       string // Target directory path for new notes
 	textarea         textarea.Model
 	mode             EditorMode
 	width            int
@@ -125,7 +126,7 @@ func NewNotesEditorForNew(notesService *services.NotesService) NotesEditorModel 
 }
 
 // NewNotesEditorForNewWithTemplate creates a new notes editor for a new note from a template
-func NewNotesEditorForNewWithTemplate(notesService *services.NotesService, templatePath string) NotesEditorModel {
+func NewNotesEditorForNewWithTemplate(notesService *services.NotesService, templatePath string, targetPath string) NotesEditorModel {
 	ta := textarea.New()
 	ta.Placeholder = "Enter note name..."
 	ta.Focus()
@@ -140,6 +141,7 @@ func NewNotesEditorForNewWithTemplate(notesService *services.NotesService, templ
 	m := NotesEditorModel{
 		notesService:     notesService,
 		templatePath:     templatePath,
+		targetPath:       targetPath,
 		textarea:         ta,
 		mode:             ModeInsert, // Start in insert mode for name
 		saved:            false,
@@ -257,9 +259,9 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				// Create from template if one was selected
 				if m.templatePath != "" {
-					filePath, err = m.notesService.CreateNoteFromTemplate(noteName, m.templatePath)
+					filePath, err = m.notesService.CreateNoteFromTemplateInPath(noteName, m.templatePath, m.targetPath)
 				} else {
-					filePath, err = m.notesService.CreateNote(noteName)
+					filePath, err = m.notesService.CreateNoteInPath(noteName, m.targetPath)
 				}
 
 				if err != nil {
