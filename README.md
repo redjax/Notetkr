@@ -13,7 +13,7 @@
 > [!WARNING]
 > This is a personal project to satisfy a personal need in my working life. I wanted a quick, cross-platform, easy to use app for jotting down daily tasks and generating a weekly summary document at the end of the week for reporting.
 >
-> The app was built to my own personal specifications and may not be useful outside of my own personal use case.
+> The app was built to my own personal specifications and may not be useful outside of my own personal use case. Releases are scanned with [`osv-scanner`](https://github.com/google/osv-scanner) and [`Gitleaks` secret scanner](https://github.com/gitleaks/gitleaks), and releases are cancelled if any critical CVEs or secrets are detected.
 
 ## Table of Contents <!-- omit in toc -->
 
@@ -116,24 +116,16 @@ I've used various tools to keep track of things I do throughout the day, specifi
 - [journal.nvim](https://github.com/jakobkhansen/journal.nvim) - Extensible note-taking system in Neovim.
   - Liked:
     - Simple, small starting point that you can build on top of.
-    - File-based backend, all my notes in a configurable location (I picked `~/.journal`.
+    - File-based backend, all my notes in a configurable location (I picked `~/.journal`).
     - Snappy.
     - Fully Markdown based
   - Disliked:
     - Not much, so far!
 
-`notetkr` should:
+I built `notetkr` with these points in mind. Writing it in Go makes it cross-platform, small, fast, & more secure (i.e. memory leaks) than a language like Python. The editor should feel familiar to Vim users; it is a modal editor with a `NORMAL` mode for commands/movement and `INSERT` mode for typing, `hjkl` or arrow key navigation, `/` keybind for searches, `g`/`G` for top/bottom of the document, and editing keybinds like `o` for inserting a new line and entering `INSERT` mode, or `a` for starting insert mode after the cursor position.
 
-- [ ] Be file-based with a configurable backend.
-  - [x] Default to files at a specified, standard location, i.e. `~/.notetkr/notes` or `~/.notetkr/journal`.
-  - [ ] Optionally support other types of backends:
-    - [ ] SQLite
-    - [ ] Encrypted files
-    - [ ] Git
-    - [ ] S3
-- [ ] Use sane defaults, with a configuration file to override.
-  - [ ] Config should live at either `~/.config/notetkr/` or `~/.notetkr`.
-  - [ ] Accept multiple config filetypes, `.yml` or `.toml` first.
-  - [ ] Be configurable from the environment.
-- [x] Use Markdown for as much as possible, or other open formats where Markdown isn't feasible.
-- [x] Offer import/export and backup functionality.
+The app stores its data in a configurable path, `$HOME/.notetkr` by default on all platforms (`$env:USERPROFILE/.notetkr` on Windows). This makes it easy to import/export data (and in fact, `notetkr` has `import` and `export` functions).
+
+Notes are Markdown files, and allow for inserting screenshots. Images are saved in either `~/.notetkr/journals/.attachments` or `~/.notetkr/notes/.attachments`, and each time an image is inserted in a note, a hash is created and compared to existing images, and the existing image is re-used instead of duplicating image data. There is also a `cleanup` menu that will scan notes and journal entries for duplicate images, deleting any duplicates and updating notes/journals with the path to the remaining image.
+
+The UI allows for creating new notes/categories (directories), moving notes/journal entries around, and loading from templates. When a new note is created, the user will be prompted to select an existing template, which will populate the note with frontmatter (tags, keywords, etc) and a default heading. Some templates are optimized for a specific purpose, i.e. the `meeting-notes.md` template starts with an `attendees:` frontmatter, and has sections for meeting notes and takeaways.
