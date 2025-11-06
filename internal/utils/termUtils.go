@@ -44,3 +44,91 @@ func DisplayWithPager(content, title string) {
 	fmt.Printf("=== %s ===\n", title)
 	fmt.Print(content)
 }
+
+// CenterContent takes a string and centers it horizontally with padding
+// It calculates the appropriate left padding to center the content
+func CenterContent(content string, termWidth int) string {
+	if termWidth <= 0 {
+		return content
+	}
+
+	// Split content into lines to find the longest line
+	lines := splitLines(content)
+	maxLineLen := 0
+	for _, line := range lines {
+		// Strip ANSI codes for accurate length calculation
+		visibleLen := visibleLength(line)
+		if visibleLen > maxLineLen {
+			maxLineLen = visibleLen
+		}
+	}
+
+	// Calculate left padding to center the content
+	leftPadding := (termWidth - maxLineLen) / 2
+	if leftPadding < 0 {
+		leftPadding = 0
+	}
+
+	// Add padding to each line
+	paddedLines := make([]string, len(lines))
+	padding := ""
+	for i := 0; i < leftPadding; i++ {
+		padding += " "
+	}
+
+	for i, line := range lines {
+		paddedLines[i] = padding + line
+	}
+
+	return joinLines(paddedLines)
+}
+
+func splitLines(s string) []string {
+	lines := []string{}
+	current := ""
+	for _, ch := range s {
+		if ch == '\n' {
+			lines = append(lines, current)
+			current = ""
+		} else {
+			current += string(ch)
+		}
+	}
+	if current != "" {
+		lines = append(lines, current)
+	}
+	return lines
+}
+
+func joinLines(lines []string) string {
+	result := ""
+	for i, line := range lines {
+		result += line
+		if i < len(lines)-1 {
+			result += "\n"
+		}
+	}
+	return result
+}
+
+// visibleLength calculates the visible length of a string, ignoring ANSI escape codes
+func visibleLength(s string) int {
+	length := 0
+	inEscape := false
+
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\x1b' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if s[i] == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		length++
+	}
+
+	return length
+}
