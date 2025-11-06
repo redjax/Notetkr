@@ -476,12 +476,12 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "tab":
 				// Indent current line
 				m.indentCurrentLine()
-				return m, nil
+				return m, textarea.Blink
 
 			case "shift+tab":
 				// Unindent current line
 				m.unindentCurrentLine()
-				return m, nil
+				return m, textarea.Blink
 
 			default:
 				m.textarea, cmd = m.textarea.Update(msg)
@@ -791,39 +791,43 @@ func (m *NotesEditorModel) insertNewLineWithIndent() tea.Cmd {
 
 // indentCurrentLine adds indentation to the current line (for Tab key)
 func (m *NotesEditorModel) indentCurrentLine() {
+	lineInfo := m.textarea.LineInfo()
+	currentLineNum := m.textarea.Line()
+	col := lineInfo.ColumnOffset
+
 	content := m.textarea.Value()
 	lines := strings.Split(content, "\n")
-	currentLineNum := m.textarea.Line()
-	lineInfo := m.textarea.LineInfo()
 
 	if currentLineNum >= len(lines) {
 		return
 	}
 
-	currentLine := lines[currentLineNum]
-
-	// Add two spaces of indentation at the start of the line
-	lines[currentLineNum] = "  " + currentLine
+	// Add two spaces at the start of the current line
+	lines[currentLineNum] = "  " + lines[currentLineNum]
 	newContent := strings.Join(lines, "\n")
+
 	m.textarea.SetValue(newContent)
 
-	// Move cursor to maintain relative position (add 2 for the new spaces)
+	// Calculate and set new cursor position
+	// Position = sum of all previous lines + newlines + column offset + 2 added spaces
 	newPos := 0
 	for i := 0; i < currentLineNum; i++ {
 		newPos += len(lines[i]) + 1 // +1 for newline
 	}
-	newPos += lineInfo.ColumnOffset + 2
-	m.textarea.SetCursor(newPos)
+	newPos += col + 2
 
+	m.textarea.SetCursor(newPos)
 	m.trackContentChange()
 }
 
 // unindentCurrentLine removes indentation from the current line (for Shift+Tab)
 func (m *NotesEditorModel) unindentCurrentLine() {
+	lineInfo := m.textarea.LineInfo()
+	currentLineNum := m.textarea.Line()
+	col := lineInfo.ColumnOffset
+
 	content := m.textarea.Value()
 	lines := strings.Split(content, "\n")
-	currentLineNum := m.textarea.Line()
-	lineInfo := m.textarea.LineInfo()
 
 	if currentLineNum >= len(lines) {
 		return
@@ -850,17 +854,18 @@ func (m *NotesEditorModel) unindentCurrentLine() {
 	newContent := strings.Join(lines, "\n")
 	m.textarea.SetValue(newContent)
 
-	// Move cursor to maintain relative position (subtract removed spaces)
+	// Calculate new cursor position
 	newPos := 0
 	for i := 0; i < currentLineNum; i++ {
 		newPos += len(lines[i]) + 1 // +1 for newline
 	}
-	newPos += lineInfo.ColumnOffset - removed
-	if newPos < 0 {
-		newPos = 0
+	newColOffset := col - removed
+	if newColOffset < 0 {
+		newColOffset = 0
 	}
-	m.textarea.SetCursor(newPos)
+	newPos += newColOffset
 
+	m.textarea.SetCursor(newPos)
 	m.trackContentChange()
 }
 
