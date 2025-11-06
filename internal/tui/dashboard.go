@@ -19,13 +19,11 @@ var (
 			Foreground(lipgloss.Color("170")).
 			Padding(1, 0)
 
-	menuItemStyle = lipgloss.NewStyle().
-			PaddingLeft(4)
+	menuItemStyle = lipgloss.NewStyle()
 
 	selectedItemStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("170")).
-				Bold(true).
-				PaddingLeft(2)
+				Bold(true)
 )
 
 func NewDashboard() DashboardModel {
@@ -119,12 +117,13 @@ func (m DashboardModel) View() string {
 
 	s += "\n" + helpStyle.Render("↑/k: up • ↓/j: down • enter/l: select • q: quit")
 
-	// Center the content and fill the screen
+	// Center the content both horizontally and vertically
 	if m.width > 0 && m.height > 0 {
 		style := lipgloss.NewStyle().
 			Width(m.width).
 			Height(m.height).
-			Align(lipgloss.Center, lipgloss.Center)
+			AlignHorizontal(lipgloss.Center).
+			AlignVertical(lipgloss.Center)
 		return style.Render(s)
 	}
 
