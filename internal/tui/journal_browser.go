@@ -113,8 +113,8 @@ func (m *JournalBrowserModel) loadItems() {
 	}
 
 	// Sort
-	sort.Strings(dirs)
-	sort.Strings(files)
+	sort.Strings(dirs)                               // Directories A-Z
+	sort.Sort(sort.Reverse(sort.StringSlice(files))) // Files Z-A (newest first)
 
 	// Add folders first (years, months, days)
 	for _, dir := range dirs {
