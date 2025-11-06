@@ -12,6 +12,36 @@ import (
 	"github.com/redjax/notetkr/internal/services"
 )
 
+type SearchFilterType int
+
+const (
+	FilterAll SearchFilterType = iota
+	FilterNotes
+	FilterJournals
+	FilterTags
+	FilterKeywords
+	FilterContent
+)
+
+func (f SearchFilterType) String() string {
+	switch f {
+	case FilterAll:
+		return "All"
+	case FilterNotes:
+		return "Notes Only"
+	case FilterJournals:
+		return "Journals Only"
+	case FilterTags:
+		return "Tags"
+	case FilterKeywords:
+		return "Keywords"
+	case FilterContent:
+		return "Content"
+	default:
+		return "All"
+	}
+}
+
 type SearchResult struct {
 	Type     string // "note" or "journal"
 	Name     string
@@ -31,6 +61,9 @@ type SearchBrowserModel struct {
 	err            error
 	searching      bool
 	hasSearched    bool
+	filterType     SearchFilterType
+	showingFilters bool
+	filterCursor   int
 }
 
 var (
@@ -81,6 +114,9 @@ func NewSearchBrowser(journalService *services.JournalService, notesService *ser
 		height:         height,
 		searching:      false,
 		hasSearched:    false,
+		filterType:     FilterAll,
+		showingFilters: false,
+		filterCursor:   0,
 	}
 }
 
@@ -106,6 +142,9 @@ func NewSearchBrowserWithQuery(journalService *services.JournalService, notesSer
 		height:         height,
 		searching:      query != "",
 		hasSearched:    false,
+		filterType:     FilterAll,
+		showingFilters: false,
+		filterCursor:   0,
 	}
 
 	return m
@@ -127,30 +166,62 @@ func (m *SearchBrowserModel) performSearch() tea.Msg {
 
 	var results []SearchResult
 
-	// Search notes
-	notes, err := m.notesService.SearchNotes(query)
-	if err == nil {
-		for _, note := range notes {
-			results = append(results, SearchResult{
-				Type:     "note",
-				Name:     note.Name,
-				FilePath: note.FilePath,
-				Preview:  strings.Join(note.Tags, ", "),
-			})
+	// Search notes based on filter type
+	if m.filterType == FilterAll || m.filterType == FilterNotes || m.filterType == FilterTags || m.filterType == FilterKeywords || m.filterType == FilterContent {
+		notes, err := m.notesService.SearchNotes(query)
+		if err == nil {
+			for _, note := range notes {
+				// Apply filter
+				shouldInclude := false
+				switch m.filterType {
+				case FilterAll, FilterNotes:
+					shouldInclude = true
+				case FilterTags:
+					// Only include if query matches tags
+					for _, tag := range note.Tags {
+						if strings.Contains(strings.ToLower(tag), strings.ToLower(query)) {
+							shouldInclude = true
+							break
+						}
+					}
+				case FilterKeywords:
+					// Only include if query matches keywords
+					for _, keyword := range note.Keywords {
+						if strings.Contains(strings.ToLower(keyword), strings.ToLower(query)) {
+							shouldInclude = true
+							break
+						}
+					}
+				case FilterContent:
+					// SearchNotes already does full-text search, so include all results
+					shouldInclude = true
+				}
+
+				if shouldInclude {
+					results = append(results, SearchResult{
+						Type:     "note",
+						Name:     note.Name,
+						FilePath: note.FilePath,
+						Preview:  strings.Join(note.Tags, ", "),
+					})
+				}
+			}
 		}
 	}
 
-	// Search journals
-	journals, err := m.journalService.SearchJournals(query)
-	if err == nil {
-		for _, journal := range journals {
-			results = append(results, SearchResult{
-				Type:     "journal",
-				Name:     journal.Date.Format("Monday, January 2, 2006"),
-				FilePath: journal.FilePath,
-				Date:     journal.Date.Format("2006-01-02"),
-				Preview:  journal.Preview,
-			})
+	// Search journals based on filter type
+	if m.filterType == FilterAll || m.filterType == FilterJournals || m.filterType == FilterContent {
+		journals, err := m.journalService.SearchJournals(query)
+		if err == nil {
+			for _, journal := range journals {
+				results = append(results, SearchResult{
+					Type:     "journal",
+					Name:     journal.Date.Format("Monday, January 2, 2006"),
+					FilePath: journal.FilePath,
+					Date:     journal.Date.Format("2006-01-02"),
+					Preview:  journal.Preview,
+				})
+			}
 		}
 	}
 
@@ -185,16 +256,50 @@ func (m SearchBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// Always allow going back
-		if msg.String() == "esc" || msg.String() == "q" {
-			return m, func() tea.Msg {
-				return BackToDashboardMsg{}
+		// Handle filter menu navigation
+		if m.showingFilters {
+			switch msg.String() {
+			case "q", "ctrl+c":
+				return m, tea.Quit
+
+			case "esc":
+				m.showingFilters = false
+				return m, nil
+
+			case "up", "k":
+				if m.filterCursor > 0 {
+					m.filterCursor--
+				}
+				return m, nil
+
+			case "down", "j":
+				if m.filterCursor < 5 { // 6 filter options (0-5)
+					m.filterCursor++
+				}
+				return m, nil
+
+			case "enter", "l":
+				// Select filter
+				m.filterType = SearchFilterType(m.filterCursor)
+				m.showingFilters = false
+				// Re-search if we already have a query
+				if m.hasSearched && m.searchInput.Value() != "" {
+					m.searching = true
+					return m, m.performSearch
+				}
+				return m, nil
 			}
+			return m, nil
 		}
 
 		// If we're focused on search input
 		if m.searchInput.Focused() {
 			switch msg.String() {
+			case "esc":
+				// Blur the search input to allow navigation/filter access
+				m.searchInput.Blur()
+				return m, nil
+
 			case "enter":
 				// Perform search
 				m.searching = true
@@ -214,47 +319,62 @@ func (m SearchBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.searchInput, cmd = m.searchInput.Update(msg)
 				return m, cmd
 			}
-		} else {
-			// We're in results list
-			switch msg.String() {
-			case "up", "k":
-				if m.cursor > 0 {
-					m.cursor--
-				} else {
-					// Go back to search input
-					m.searchInput.Focus()
-					return m, textinput.Blink
-				}
+		}
 
-			case "down", "j":
-				if m.cursor < len(m.results)-1 {
-					m.cursor++
-				}
+		// We're in results list or navigating (not in search input)
 
-			case "enter", " ":
-				// Open selected result
-				if len(m.results) > 0 {
-					result := m.results[m.cursor]
-					if result.Type == "note" {
-						return m, func() tea.Msg {
-							return OpenNoteMsg{filePath: result.FilePath}
-						}
-					} else {
-						// Parse date and open journal
-						date, err := parseDate(result.Date)
-						if err == nil {
-							return m, func() tea.Msg {
-								return OpenJournalMsg{date: date}
-							}
-						}
-					}
-				}
+		// Allow going back to dashboard
+		if msg.String() == "esc" || msg.String() == "q" {
+			return m, func() tea.Msg {
+				return BackToDashboardMsg{}
+			}
+		}
 
-			case "/":
+		// Toggle filter menu
+		if msg.String() == "f" {
+			m.showingFilters = true
+			m.filterCursor = int(m.filterType)
+			return m, nil
+		}
+
+		switch msg.String() {
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			} else {
 				// Go back to search input
 				m.searchInput.Focus()
 				return m, textinput.Blink
 			}
+
+		case "down", "j":
+			if m.cursor < len(m.results)-1 {
+				m.cursor++
+			}
+
+		case "enter", " ":
+			// Open selected result
+			if len(m.results) > 0 {
+				result := m.results[m.cursor]
+				if result.Type == "note" {
+					return m, func() tea.Msg {
+						return OpenNoteMsg{filePath: result.FilePath}
+					}
+				} else {
+					// Parse date and open journal
+					date, err := parseDate(result.Date)
+					if err == nil {
+						return m, func() tea.Msg {
+							return OpenJournalMsg{date: date}
+						}
+					}
+				}
+			}
+
+		case "/":
+			// Go back to search input
+			m.searchInput.Focus()
+			return m, textinput.Blink
 		}
 	}
 
@@ -272,9 +392,33 @@ func (m SearchBrowserModel) View() string {
 	b.WriteString(searchBrowserTitleStyle.Render("🔍 Search"))
 	b.WriteString("\n\n")
 
-	// Search input
+	// Search input with filter indicator
 	b.WriteString(searchInputStyle.Render(m.searchInput.View()))
+	b.WriteString("  ")
+	filterIndicator := fmt.Sprintf("[Filter: %s]", m.filterType.String())
+	b.WriteString(searchTypeNoteStyle.Render(filterIndicator))
 	b.WriteString("\n\n")
+
+	// Show filter menu if active
+	if m.showingFilters {
+		b.WriteString(searchTypeJournalStyle.Render("Select Filter:"))
+		b.WriteString("\n\n")
+
+		filters := []SearchFilterType{FilterAll, FilterNotes, FilterJournals, FilterTags, FilterKeywords, FilterContent}
+		for i, filter := range filters {
+			cursor := "  "
+			if i == m.filterCursor {
+				cursor = "▶ "
+				b.WriteString(searchSelectedStyle.Render(cursor + filter.String()))
+			} else {
+				b.WriteString(searchResultStyle.Render(cursor + filter.String()))
+			}
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+		b.WriteString(searchHelpStyle.Render("↑/k: up • ↓/j: down • enter/l: select • esc: back"))
+		return b.String()
+	}
 
 	// Status or results
 	if m.searching {
@@ -346,9 +490,9 @@ func (m SearchBrowserModel) View() string {
 	// Help text
 	var help string
 	if m.searchInput.Focused() {
-		help = "enter: search • down: results • esc: back to dashboard"
+		help = "enter: search • down: results • esc: exit search box • f: filter (exit box first)"
 	} else {
-		help = "↑/k: up • ↓/j: down • enter: open • /: new search • esc/q: back to dashboard"
+		help = "↑/k: up • ↓/j: down • enter: open • /: edit search • f: filter • esc/q: back"
 	}
 	b.WriteString(searchHelpStyle.Render(help))
 
