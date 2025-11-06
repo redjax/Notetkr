@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -19,26 +20,46 @@ const (
 	FilterTag
 )
 
+type directoryNode struct {
+	name        string
+	fullPath    string
+	children    []*directoryNode
+	isExpanded  bool
+	hasChildren bool
+}
+
 type NotesBrowserModel struct {
-	notesService     *services.NotesService
-	notes            []services.Note
-	filteredNotes    []services.Note
-	allTags          []string
-	templates        []services.Note
-	cursor           int
-	width            int
-	height           int
-	err              error
-	searchInput      textinput.Model
-	filterMode       FilterMode
-	showingTags      bool
-	showingTemplates bool
-	tagCursor        int
-	templateCursor   int
-	confirmDelete    bool
-	deleteTarget     string
-	deleteTargetIdx  int
-	previewService   *services.PreviewService
+	notesService       *services.NotesService
+	notes              []services.Note
+	filteredNotes      []services.Note
+	directories        []string // Directories in current path
+	currentPath        string   // Current navigation path relative to notes root
+	allTags            []string
+	templates          []services.Note
+	cursor             int
+	width              int
+	height             int
+	err                error
+	searchInput        textinput.Model
+	filterMode         FilterMode
+	showingTags        bool
+	showingTemplates   bool
+	tagCursor          int
+	templateCursor     int
+	confirmDelete      bool
+	deleteTarget       string
+	deleteTargetIdx    int
+	previewService     *services.PreviewService
+	showingNewMenu     bool
+	newMenuCursor      int
+	creatingCategory   bool
+	categoryInput      textinput.Model
+	movingNote         bool
+	moveTargetIdx      int
+	moveInput          textinput.Model
+	moveDirTree        []*directoryNode // Flattened view of directory tree for move UI
+	moveCursor         int
+	moveCreatingNewDir bool
 }
 
 var (
@@ -74,9 +95,21 @@ func NewNotesBrowser(notesService *services.NotesService, width, height int) Not
 	searchInput.Placeholder = "Search notes..."
 	searchInput.CharLimit = 100
 
+	categoryInput := textinput.New()
+	categoryInput.Placeholder = "Enter category path (e.g., work/projects)..."
+	categoryInput.CharLimit = 200
+	categoryInput.Width = 50
+
+	moveInput := textinput.New()
+	moveInput.Placeholder = "Enter destination path (e.g., work/projects)..."
+	moveInput.CharLimit = 200
+	moveInput.Width = 50
+
 	m := NotesBrowserModel{
 		notesService:     notesService,
 		searchInput:      searchInput,
+		categoryInput:    categoryInput,
+		moveInput:        moveInput,
 		filterMode:       FilterNone,
 		showingTags:      false,
 		showingTemplates: false,
@@ -94,18 +127,14 @@ func NewNotesBrowser(notesService *services.NotesService, width, height int) Not
 }
 
 func (m *NotesBrowserModel) loadNotes() {
-	notes, err := m.notesService.ListNotes()
+	notes, directories, err := m.notesService.ListNotesInPath(m.currentPath)
 	if err != nil {
 		m.err = err
 		return
 	}
 
-	// Sort by modified time (newest first)
-	sort.Slice(notes, func(i, j int) bool {
-		return notes[i].ModTime.After(notes[j].ModTime)
-	})
-
 	m.notes = notes
+	m.directories = directories
 	m.filteredNotes = notes
 	m.cursor = 0
 
@@ -115,6 +144,128 @@ func (m *NotesBrowserModel) loadNotes() {
 		sort.Strings(tags)
 		m.allTags = tags
 	}
+}
+
+func (m *NotesBrowserModel) buildMoveDirectoryTree() {
+	// Get all directories
+	allDirs, err := m.notesService.GetAllDirectories()
+	if err != nil {
+		m.err = err
+		return
+	}
+
+	// Build a tree structure
+	root := &directoryNode{
+		name:        ".",
+		fullPath:    "",
+		children:    []*directoryNode{},
+		isExpanded:  true,
+		hasChildren: false,
+	}
+
+	nodeMap := make(map[string]*directoryNode)
+	nodeMap[""] = root
+
+	// Create nodes for all directories
+	for _, dirPath := range allDirs {
+		parts := strings.Split(filepath.ToSlash(dirPath), "/")
+		currentPath := ""
+
+		for i, part := range parts {
+			if i > 0 {
+				currentPath = filepath.Join(currentPath, parts[i-1])
+			}
+			fullPath := filepath.Join(currentPath, part)
+
+			if _, exists := nodeMap[fullPath]; !exists {
+				node := &directoryNode{
+					name:        part,
+					fullPath:    fullPath,
+					children:    []*directoryNode{},
+					isExpanded:  false,
+					hasChildren: false,
+				}
+				nodeMap[fullPath] = node
+
+				// Add to parent
+				parent := nodeMap[currentPath]
+				parent.children = append(parent.children, node)
+				parent.hasChildren = true
+			}
+			currentPath = fullPath
+		}
+	}
+
+	// Flatten the tree for display
+	m.moveDirTree = m.flattenDirectoryTree(root)
+}
+
+func (m *NotesBrowserModel) flattenDirectoryTree(node *directoryNode) []*directoryNode {
+	result := []*directoryNode{}
+
+	if node.fullPath != "" { // Don't include root
+		result = append(result, node)
+	}
+
+	if node.isExpanded {
+		for _, child := range node.children {
+			result = append(result, m.flattenDirectoryTree(child)...)
+		}
+	}
+
+	return result
+}
+
+func (m *NotesBrowserModel) toggleDirectoryExpansion() {
+	if m.moveCursor < len(m.moveDirTree) {
+		node := m.moveDirTree[m.moveCursor]
+		if node.hasChildren {
+			node.isExpanded = !node.isExpanded
+			// Rebuild flattened tree
+			root := m.findRootNode()
+			m.moveDirTree = m.flattenDirectoryTree(root)
+		}
+	}
+}
+
+func (m *NotesBrowserModel) findRootNode() *directoryNode {
+	// Reconstruct the tree from flattened list
+	root := &directoryNode{
+		name:        ".",
+		fullPath:    "",
+		children:    []*directoryNode{},
+		isExpanded:  true,
+		hasChildren: len(m.moveDirTree) > 0,
+	}
+
+	nodeMap := make(map[string]*directoryNode)
+	nodeMap[""] = root
+
+	for _, node := range m.moveDirTree {
+		nodeMap[node.fullPath] = node
+
+		// Find parent
+		parentPath := filepath.Dir(node.fullPath)
+		if parentPath == "." {
+			parentPath = ""
+		}
+
+		if parent, exists := nodeMap[parentPath]; exists {
+			// Check if already in children
+			found := false
+			for _, child := range parent.children {
+				if child.fullPath == node.fullPath {
+					found = true
+					break
+				}
+			}
+			if !found {
+				parent.children = append(parent.children, node)
+			}
+		}
+	}
+
+	return root
 }
 
 func (m *NotesBrowserModel) loadTemplates() {
@@ -211,6 +362,179 @@ func (m NotesBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Handle category input
+		if m.creatingCategory {
+			switch msg.String() {
+			case "esc":
+				m.creatingCategory = false
+				m.categoryInput.Blur()
+				m.categoryInput.SetValue("")
+				return m, nil
+
+			case "enter":
+				categoryPath := strings.TrimSpace(m.categoryInput.Value())
+				if categoryPath != "" {
+					// Combine current path with new category path
+					fullCategoryPath := categoryPath
+					if m.currentPath != "" {
+						fullCategoryPath = filepath.Join(m.currentPath, categoryPath)
+					}
+					// Create the category directory
+					if err := m.notesService.CreateCategory(fullCategoryPath); err != nil {
+						m.err = err
+					} else {
+						m.loadNotes()
+					}
+				}
+				m.creatingCategory = false
+				m.categoryInput.Blur()
+				m.categoryInput.SetValue("")
+				return m, nil
+
+			default:
+				var cmd tea.Cmd
+				m.categoryInput, cmd = m.categoryInput.Update(msg)
+				return m, cmd
+			}
+		}
+
+		// Handle move note directory selection or new directory input
+		if m.movingNote {
+			// If creating new directory, handle text input
+			if m.moveCreatingNewDir {
+				switch msg.String() {
+				case "esc":
+					m.moveCreatingNewDir = false
+					m.moveInput.Blur()
+					m.moveInput.SetValue("")
+					return m, nil
+
+				case "enter":
+					destPath := strings.TrimSpace(m.moveInput.Value())
+					if destPath != "" && m.moveTargetIdx < len(m.filteredNotes) {
+						note := m.filteredNotes[m.moveTargetIdx]
+						// Move the note
+						if err := m.notesService.MoveNote(note.FilePath, destPath); err != nil {
+							m.err = err
+						} else {
+							m.loadNotes()
+						}
+					}
+					m.movingNote = false
+					m.moveCreatingNewDir = false
+					m.moveInput.Blur()
+					m.moveInput.SetValue("")
+					return m, nil
+
+				default:
+					var cmd tea.Cmd
+					m.moveInput, cmd = m.moveInput.Update(msg)
+					return m, cmd
+				}
+			}
+
+			// Otherwise, handle directory tree navigation
+			switch msg.String() {
+			case "q", "ctrl+c":
+				return m, tea.Quit
+
+			case "esc":
+				m.movingNote = false
+				return m, nil
+
+			case "up", "k":
+				if m.moveCursor > 0 {
+					m.moveCursor--
+				}
+				return m, nil
+
+			case "down", "j":
+				if m.moveCursor < len(m.moveDirTree)-1 {
+					m.moveCursor++
+				}
+				return m, nil
+
+			case "right", "l":
+				// Expand directory
+				m.toggleDirectoryExpansion()
+				return m, nil
+
+			case "left", "h":
+				// Collapse directory
+				if m.moveCursor < len(m.moveDirTree) {
+					node := m.moveDirTree[m.moveCursor]
+					if node.isExpanded {
+						node.isExpanded = false
+						root := m.findRootNode()
+						m.moveDirTree = m.flattenDirectoryTree(root)
+					}
+				}
+				return m, nil
+
+			case "n":
+				// Create new directory
+				m.moveCreatingNewDir = true
+				m.moveInput.SetValue("")
+				m.moveInput.Focus()
+				return m, textinput.Blink
+
+			case "enter":
+				// Move note to selected directory
+				if m.moveCursor < len(m.moveDirTree) && m.moveTargetIdx < len(m.filteredNotes) {
+					node := m.moveDirTree[m.moveCursor]
+					note := m.filteredNotes[m.moveTargetIdx]
+					// Move the note
+					if err := m.notesService.MoveNote(note.FilePath, node.fullPath); err != nil {
+						m.err = err
+					} else {
+						m.loadNotes()
+					}
+				}
+				m.movingNote = false
+				return m, nil
+			}
+			return m, nil
+		}
+
+		// Handle new item menu (note or category)
+		if m.showingNewMenu {
+			switch msg.String() {
+			case "q", "ctrl+c":
+				return m, tea.Quit
+
+			case "esc":
+				m.showingNewMenu = false
+				return m, nil
+
+			case "up", "k":
+				if m.newMenuCursor > 0 {
+					m.newMenuCursor--
+				}
+				return m, nil
+
+			case "down", "j":
+				if m.newMenuCursor < 1 { // 0: New Note, 1: New Category
+					m.newMenuCursor++
+				}
+				return m, nil
+
+			case "enter", "l":
+				m.showingNewMenu = false
+				if m.newMenuCursor == 0 {
+					// Show template selection for new note
+					m.showingTemplates = true
+					m.templateCursor = 0
+				} else {
+					// Show category input
+					m.creatingCategory = true
+					m.categoryInput.Focus()
+					return m, textinput.Blink
+				}
+				return m, nil
+			}
+			return m, nil
+		}
+
 		// Handle template selection mode
 		if m.showingTemplates {
 			switch msg.String() {
@@ -238,7 +562,10 @@ func (m NotesBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					selectedTemplate := m.templates[m.templateCursor]
 					m.showingTemplates = false
 					return m, func() tea.Msg {
-						return CreateNoteFromTemplateMsg{templatePath: selectedTemplate.FilePath}
+						return CreateNoteFromTemplateMsg{
+							templatePath: selectedTemplate.FilePath,
+							targetPath:   m.currentPath,
+						}
 					}
 				}
 				return m, nil
@@ -280,7 +607,16 @@ func (m NotesBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "esc", "h":
-			// Go back to dashboard
+			// If we're in a subdirectory, go up one level
+			if m.currentPath != "" {
+				m.currentPath = filepath.Dir(m.currentPath)
+				if m.currentPath == "." {
+					m.currentPath = ""
+				}
+				m.loadNotes()
+				return m, nil
+			}
+			// Otherwise, go back to dashboard
 			return m, func() tea.Msg {
 				return BackToDashboardMsg{}
 			}
@@ -292,14 +628,29 @@ func (m NotesBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "down", "j":
-			if m.cursor < len(m.filteredNotes)-1 {
+			totalItems := len(m.directories) + len(m.filteredNotes)
+			if m.cursor < totalItems-1 {
 				m.cursor++
 			}
 			return m, nil
 
 		case "enter", "l":
-			if len(m.filteredNotes) > 0 {
-				note := m.filteredNotes[m.cursor]
+			// Check if selecting a directory
+			if m.cursor < len(m.directories) {
+				// Navigate into directory
+				dirName := m.directories[m.cursor]
+				if m.currentPath == "" {
+					m.currentPath = dirName
+				} else {
+					m.currentPath = filepath.Join(m.currentPath, dirName)
+				}
+				m.loadNotes()
+				return m, nil
+			}
+			// Selecting a note
+			noteIdx := m.cursor - len(m.directories)
+			if noteIdx >= 0 && noteIdx < len(m.filteredNotes) {
+				note := m.filteredNotes[noteIdx]
 				return m, func() tea.Msg {
 					return OpenNoteMsg{filePath: note.FilePath}
 				}
@@ -307,9 +658,22 @@ func (m NotesBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "n":
-			// Show template selection
-			m.showingTemplates = true
-			m.templateCursor = 0
+			// Show new item menu (note or category)
+			m.showingNewMenu = true
+			m.newMenuCursor = 0
+			return m, nil
+
+		case "m":
+			// Move note to different category
+			noteIdx := m.cursor - len(m.directories)
+			if noteIdx >= 0 && noteIdx < len(m.filteredNotes) {
+				m.movingNote = true
+				m.moveTargetIdx = noteIdx
+				m.moveCursor = 0
+				m.moveCreatingNewDir = false
+				m.buildMoveDirectoryTree()
+				return m, nil
+			}
 			return m, nil
 
 		case "/":
@@ -338,19 +702,21 @@ func (m NotesBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "d":
-			// Delete note
-			if len(m.filteredNotes) > 0 {
-				note := m.filteredNotes[m.cursor]
+			// Delete note (only if a note is selected, not a directory)
+			noteIdx := m.cursor - len(m.directories)
+			if noteIdx >= 0 && noteIdx < len(m.filteredNotes) {
+				note := m.filteredNotes[noteIdx]
 				m.confirmDelete = true
 				m.deleteTarget = note.Name
-				m.deleteTargetIdx = m.cursor
+				m.deleteTargetIdx = noteIdx
 			}
 			return m, nil
 
 		case "p":
-			// Preview note in browser
-			if len(m.filteredNotes) > 0 {
-				note := m.filteredNotes[m.cursor]
+			// Preview note in browser (only if a note is selected, not a directory)
+			noteIdx := m.cursor - len(m.directories)
+			if noteIdx >= 0 && noteIdx < len(m.filteredNotes) {
+				note := m.filteredNotes[noteIdx]
 				// Read the note content
 				content, err := m.notesService.ReadNote(note.FilePath)
 				if err == nil {
@@ -389,6 +755,90 @@ func (m NotesBrowserModel) View() string {
 		s += dialog + "\n\n"
 	}
 
+	// Show category input
+	if m.creatingCategory {
+		dialogText := confirmTextStyle.Render("Create New Category") + "\n\n"
+		dialogText += "Enter category path (e.g., work/projects):\n"
+		dialogText += m.categoryInput.View() + "\n\n"
+		dialogText += "  enter: create   esc: cancel"
+		dialog := confirmDialogStyle.Render(dialogText)
+		s += dialog + "\n\n"
+	}
+
+	// Show move note directory selection or new dir input
+	if m.movingNote {
+		noteName := ""
+		if m.moveTargetIdx < len(m.filteredNotes) {
+			noteName = m.filteredNotes[m.moveTargetIdx].Name
+		}
+
+		if m.moveCreatingNewDir {
+			// Show text input for creating new directory
+			dialogText := confirmTextStyle.Render(fmt.Sprintf("Move '%s' to new directory", noteName)) + "\n\n"
+			dialogText += "Enter directory path (e.g., work/projects):\n"
+			dialogText += m.moveInput.View() + "\n\n"
+			dialogText += "  enter: move   esc: cancel"
+			dialog := confirmDialogStyle.Render(dialogText)
+			s += dialog + "\n\n"
+		} else {
+			// Show directory tree selection
+			dialogText := confirmTextStyle.Render(fmt.Sprintf("Move '%s' to:", noteName)) + "\n\n"
+
+			if len(m.moveDirTree) == 0 {
+				dialogText += "  No directories found.\n"
+				dialogText += "  Press 'n' to create a new directory.\n"
+			} else {
+				for i, node := range m.moveDirTree {
+					depth := strings.Count(node.fullPath, string(filepath.Separator))
+					indent := strings.Repeat("  ", depth)
+
+					prefix := "  "
+					if i == m.moveCursor {
+						prefix = "▶ "
+					}
+
+					expandIcon := ""
+					if node.hasChildren {
+						if node.isExpanded {
+							expandIcon = "▼ "
+						} else {
+							expandIcon = "▶ "
+						}
+					} else {
+						expandIcon = "  "
+					}
+
+					line := prefix + indent + expandIcon + "📁 " + node.name
+					if i == m.moveCursor {
+						dialogText += noteSelectedStyle.Render(line) + "\n"
+					} else {
+						dialogText += line + "\n"
+					}
+				}
+			}
+
+			dialogText += "\n  ↑/k: up • ↓/j: down • →/l: expand • ←/h: collapse • enter: select • n: new dir • esc: cancel"
+			dialog := confirmDialogStyle.Render(dialogText)
+			s += dialog + "\n\n"
+		}
+	}
+
+	// Show new item menu
+	if m.showingNewMenu {
+		menuText := confirmTextStyle.Render("Create New...") + "\n\n"
+		options := []string{"Note", "Category"}
+		for i, option := range options {
+			if i == m.newMenuCursor {
+				menuText += noteSelectedStyle.Render("▶ "+option) + "\n"
+			} else {
+				menuText += "  " + option + "\n"
+			}
+		}
+		menuText += "\n  enter/l: select   esc: cancel"
+		dialog := confirmDialogStyle.Render(menuText)
+		s += dialog + "\n\n"
+	}
+
 	// Show tag selection overlay
 	if m.showingTags {
 		s += tagListStyle.Render(m.renderTagList()) + "\n\n"
@@ -396,14 +846,34 @@ func (m NotesBrowserModel) View() string {
 		// Show template selection overlay
 		s += tagListStyle.Render(m.renderTemplateList()) + "\n\n"
 	} else {
-		// Show notes list
-		if len(m.filteredNotes) == 0 {
-			s += "  No notes found.\n\n"
-			s += noteItemStyle.Render("Press 'n' to create a new note") + "\n"
+		// Show current path breadcrumb
+		if m.currentPath != "" {
+			s += noteTagStyle.Render("📁 "+m.currentPath) + "\n\n"
+		}
+
+		// Show directories and notes list
+		totalItems := len(m.directories) + len(m.filteredNotes)
+		if totalItems == 0 {
+			s += "  No notes or folders found.\n\n"
+			s += noteItemStyle.Render("Press 'n' to create a new note or category") + "\n"
 		} else {
-			for i, note := range m.filteredNotes {
+			// Render directories first
+			for i, dir := range m.directories {
 				var line string
 				if i == m.cursor {
+					line = "▶ 📁 " + dir + "/"
+					s += noteSelectedStyle.Render(line) + "\n"
+				} else {
+					line = "  📁 " + dir + "/"
+					s += noteItemStyle.Render(line) + "\n"
+				}
+			}
+
+			// Then render notes
+			for i, note := range m.filteredNotes {
+				itemIdx := len(m.directories) + i
+				var line string
+				if itemIdx == m.cursor {
 					line = "▶ " + note.Name
 					if len(note.Tags) > 0 {
 						line += " " + noteTagStyle.Render("["+strings.Join(note.Tags, ", ")+"]")
@@ -427,10 +897,14 @@ func (m NotesBrowserModel) View() string {
 		s += helpStyle.Render("↑/k: up • ↓/j: down • enter/l: select tag • esc: back")
 	} else if m.showingTemplates {
 		s += helpStyle.Render("↑/k: up • ↓/j: down • enter/l: select template • esc: back")
+	} else if m.showingNewMenu {
+		s += helpStyle.Render("↑/k: up • ↓/j: down • enter/l: select • esc: back")
+	} else if m.creatingCategory || m.movingNote {
+		s += helpStyle.Render("enter: confirm • esc: cancel")
 	} else if m.filterMode == FilterSearch && m.searchInput.Focused() {
 		s += helpStyle.Render("enter: search • esc: cancel")
 	} else {
-		s += helpStyle.Render("↑/k: up • ↓/j: down • enter/l: open • p: preview • n: new • /: search • t: tags • c: clear filter • r: refresh • d: delete • esc/h: back • q: quit")
+		s += helpStyle.Render("↑/k: up • ↓/j: down • enter/l: open • p: preview • n: new • m: move • /: search • t: tags • c: clear filter • r: refresh • d: delete • esc/h: back • q: quit")
 	}
 
 	// Fill the screen
@@ -490,6 +964,7 @@ type CreateNoteMsg struct{}
 
 type CreateNoteFromTemplateMsg struct {
 	templatePath string
+	targetPath   string
 }
 
 type BackToDashboardMsg struct{}

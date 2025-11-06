@@ -423,16 +423,26 @@ func (s *NotesService) GetAllTags() ([]string, error) {
 
 // CreateNote creates a new note file
 func (s *NotesService) CreateNote(name string) (string, error) {
+	return s.CreateNoteInPath(name, "")
+}
+
+// CreateNoteInPath creates a new note in a specific subdirectory
+func (s *NotesService) CreateNoteInPath(name string, relPath string) (string, error) {
 	// Ensure .md extension
 	if !strings.HasSuffix(name, ".md") {
 		name = name + ".md"
 	}
 
-	filePath := filepath.Join(s.notesDir, name)
+	// Build target directory
+	targetDir := s.notesDir
+	if relPath != "" {
+		targetDir = filepath.Join(s.notesDir, relPath)
+	}
+
+	filePath := filepath.Join(targetDir, name)
 
 	// Ensure directory exists
-	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return "", err
 	}
 
@@ -483,16 +493,26 @@ func (s *NotesService) DeleteNote(filePath string) error {
 
 // CreateNoteFromTemplate creates a new note using a template
 func (s *NotesService) CreateNoteFromTemplate(name, templatePath string) (string, error) {
+	return s.CreateNoteFromTemplateInPath(name, templatePath, "")
+}
+
+// CreateNoteFromTemplateInPath creates a new note using a template in a specific subdirectory
+func (s *NotesService) CreateNoteFromTemplateInPath(name, templatePath, relPath string) (string, error) {
 	// Ensure .md extension
 	if !strings.HasSuffix(name, ".md") {
 		name = name + ".md"
 	}
 
-	filePath := filepath.Join(s.notesDir, name)
+	// Build target directory
+	targetDir := s.notesDir
+	if relPath != "" {
+		targetDir = filepath.Join(s.notesDir, relPath)
+	}
+
+	filePath := filepath.Join(targetDir, name)
 
 	// Ensure directory exists
-	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return "", err
 	}
 
@@ -610,4 +630,147 @@ keywords:
 	}
 
 	return nil
+}
+
+// CreateCategory creates a new directory/category for notes
+func (s *NotesService) CreateCategory(categoryPath string) error {
+	// Clean the path and build absolute path
+	cleanPath := filepath.Clean(categoryPath)
+	fullPath := filepath.Join(s.notesDir, cleanPath)
+
+	// Prevent creating paths outside notes directory
+	relPath, err := filepath.Rel(s.notesDir, fullPath)
+	if err != nil || strings.HasPrefix(relPath, "..") {
+		return filepath.ErrBadPattern
+	}
+
+	// Create the directory and any necessary parent directories
+	return os.MkdirAll(fullPath, 0755)
+}
+
+// MoveNote moves a note to a new location
+func (s *NotesService) MoveNote(oldPath, newCategoryPath string) error {
+	// Clean the new category path
+	cleanPath := filepath.Clean(newCategoryPath)
+	targetDir := filepath.Join(s.notesDir, cleanPath)
+
+	// Prevent moving outside notes directory
+	relPath, err := filepath.Rel(s.notesDir, targetDir)
+	if err != nil || strings.HasPrefix(relPath, "..") {
+		return filepath.ErrBadPattern
+	}
+
+	// Create target directory if it doesn't exist
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return err
+	}
+
+	// Build new file path with same filename
+	filename := filepath.Base(oldPath)
+	newPath := filepath.Join(targetDir, filename)
+
+	// Move the file
+	return os.Rename(oldPath, newPath)
+}
+
+// ListNotesInPath returns notes and directories in a specific path
+func (s *NotesService) ListNotesInPath(relPath string) ([]Note, []string, error) {
+	var notes []Note
+	var directories []string
+
+	// Build absolute path
+	targetPath := filepath.Join(s.notesDir, relPath)
+
+	// Read directory contents
+	entries, err := os.ReadDir(targetPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, entry := range entries {
+		fullPath := filepath.Join(targetPath, entry.Name())
+
+		if entry.IsDir() {
+			// Skip hidden directories (starting with .)
+			if strings.HasPrefix(entry.Name(), ".") {
+				continue
+			}
+			directories = append(directories, entry.Name())
+		} else if strings.HasSuffix(entry.Name(), ".md") {
+			// Get file info for metadata
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+
+			// Extract metadata from file
+			tags, _ := s.extractTags(fullPath)
+			keywords, _ := s.extractKeywords(fullPath)
+			attendees, _ := s.extractAttendees(fullPath)
+
+			notes = append(notes, Note{
+				Name:       entry.Name(),
+				FilePath:   fullPath,
+				Tags:       tags,
+				Keywords:   keywords,
+				Attendees:  attendees,
+				ModTime:    info.ModTime(),
+				IsTemplate: false,
+			})
+		}
+	}
+
+	// Sort directories alphabetically
+	sort.Strings(directories)
+
+	// Sort notes by modified time (newest first)
+	sort.Slice(notes, func(i, j int) bool {
+		return notes[i].ModTime.After(notes[j].ModTime)
+	})
+
+	return notes, directories, nil
+}
+
+// GetAllDirectories recursively gets all directories under the notes directory
+func (s *NotesService) GetAllDirectories() ([]string, error) {
+	var directories []string
+
+	err := filepath.Walk(s.notesDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip if not a directory
+		if !info.IsDir() {
+			return nil
+		}
+
+		// Skip the root notes directory itself
+		if path == s.notesDir {
+			return nil
+		}
+
+		// Skip hidden directories (starting with .)
+		if strings.HasPrefix(info.Name(), ".") {
+			return filepath.SkipDir
+		}
+
+		// Get relative path from notes directory
+		relPath, err := filepath.Rel(s.notesDir, path)
+		if err != nil {
+			return err
+		}
+
+		directories = append(directories, relPath)
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort directories alphabetically
+	sort.Strings(directories)
+
+	return directories, nil
 }
