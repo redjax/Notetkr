@@ -34,7 +34,7 @@ You can download & install Notetkr on Linux & Mac using [the `install-notetkr.sh
 To download & install in 1 command, do:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/redjax/Notetkr/refs/heads/main/scripts/install-notetkr.sh | bash -s -- --auto
+curl -LsSf https://raw.githubusercontent.com/redjax/Notetkr/refs/heads/main/scripts/install-notetakr.sh | bash -s -- --auto
 ```
 
 For Windows, use:
