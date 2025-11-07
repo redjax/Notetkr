@@ -396,6 +396,11 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.deleteLine()
 				return m, nil
 
+			case "x":
+				// Delete character under cursor (like x in vim)
+				m.deleteChar()
+				return m, nil
+
 			case "p":
 				// Preview markdown in browser
 				if m.filePath != "" {
@@ -642,6 +647,59 @@ func (m *JournalEditorModel) deleteLine() {
 	} else {
 		m.textarea.SetCursor(0)
 	}
+
+	// Track the change after deletion
+	m.trackContentChange()
+}
+
+// deleteChar deletes the character under the cursor (like x in vim)
+func (m *JournalEditorModel) deleteChar() {
+	content := m.textarea.Value()
+	if content == "" {
+		return
+	}
+
+	// Save current state before deletion
+	m.trackContentChange()
+
+	// Get cursor position
+	lineInfo := m.textarea.LineInfo()
+	currentLine := m.textarea.Line()
+	cursorCol := lineInfo.ColumnOffset
+
+	lines := strings.Split(content, "\n")
+	if currentLine >= len(lines) {
+		return
+	}
+
+	currentLineText := lines[currentLine]
+
+	// If cursor is at or beyond the end of the line, nothing to delete
+	if cursorCol >= len(currentLineText) {
+		return
+	}
+
+	// Delete the character at cursor position
+	newLineText := currentLineText[:cursorCol] + currentLineText[cursorCol+1:]
+	lines[currentLine] = newLineText
+
+	// Reconstruct content
+	newContent := strings.Join(lines, "\n")
+
+	// Update the content
+	m.textarea.SetValue(newContent)
+
+	// Restore cursor position by moving to the correct line and column
+	// Reset to start
+	m.textarea.SetCursor(0)
+
+	// Move down to the correct line
+	for i := 0; i < currentLine; i++ {
+		m.textarea.CursorDown()
+	}
+
+	// Move to the correct column position
+	m.textarea.SetCursor(cursorCol)
 
 	// Track the change after deletion
 	m.trackContentChange()
@@ -912,7 +970,7 @@ func (m JournalEditorModel) View() string {
 	// Help - different based on mode
 	var help string
 	if m.mode == ModeNormal {
-		help = "hjkl: move • i/a/o: insert • d: delete line • p: preview • 0/$: line start/end • g/G: top/bottom • ctrl+s: save • q: back"
+		help = "hjkl: move • i/a/o: insert • d: delete line • x: delete char • p: preview • 0/$: line start/end • g/G: top/bottom • ctrl+s: save • q: back"
 	} else {
 		help = "esc: normal mode • ctrl+z/y: undo/redo • alt+v: paste image • ctrl+s: save • ctrl+c: quit"
 	}
