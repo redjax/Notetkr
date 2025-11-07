@@ -144,6 +144,16 @@ func (m WeekBrowserModel) View() string {
 	if len(m.weeks) == 0 {
 		s += "  No weeks with journal entries found.\n\n"
 		s += helpStyle.Render("esc: back • q: quit")
+
+		// Center the content and fill the screen
+		if m.width > 0 && m.height > 0 {
+			style := lipgloss.NewStyle().
+				Width(m.width).
+				Height(m.height).
+				AlignHorizontal(lipgloss.Center).
+				AlignVertical(lipgloss.Center)
+			return style.Render(s)
+		}
 		return s
 	}
 
@@ -159,6 +169,16 @@ func (m WeekBrowserModel) View() string {
 	}
 
 	s += "\n" + helpStyle.Render("↑/k ↓/j: navigate • enter/l: select • esc/h: back • q: quit")
+
+	// Center the content and fill the screen
+	if m.width > 0 && m.height > 0 {
+		style := lipgloss.NewStyle().
+			Width(m.width).
+			Height(m.height).
+			AlignHorizontal(lipgloss.Center).
+			AlignVertical(lipgloss.Center)
+		return style.Render(s)
+	}
 
 	return s
 }
