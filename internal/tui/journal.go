@@ -103,7 +103,7 @@ func (m JournalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "g":
 			// Open weekly summary menu
-			return NewWeeklySummaryMenu(m.journalService), nil
+			return NewWeeklySummaryMenuWithSize(m.journalService, m.width, m.height), nil
 		}
 	}
 

@@ -50,6 +50,13 @@ func NewWeekBrowser(journalService *services.JournalService) WeekBrowserModel {
 	return m
 }
 
+func NewWeekBrowserWithSize(journalService *services.JournalService, width, height int) WeekBrowserModel {
+	m := NewWeekBrowser(journalService)
+	m.width = width
+	m.height = height
+	return m
+}
+
 func (m *WeekBrowserModel) generateWeekOptions() {
 	m.weeks = []weekOption{}
 
@@ -92,7 +99,7 @@ func (m WeekBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case WeeklySummaryGeneratedMsg:
 		// Switch to weekly summary viewer
-		return NewWeeklySummaryViewer(m.journalService, msg.summary, msg.weekStart, msg.weekEnd), nil
+		return NewWeeklySummaryViewerWithSize(m.journalService, msg.summary, msg.weekStart, msg.weekEnd, m.width, m.height), nil
 
 	case WeeklySummaryErrorMsg:
 		// Could add error display here, for now just stay on browser
@@ -105,8 +112,7 @@ func (m WeekBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "esc", "h", "left":
 			// Return to weekly summary menu
-			return NewWeeklySummaryMenu(m.journalService), nil
-
+			return NewWeeklySummaryMenuWithSize(m.journalService, m.width, m.height), nil
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--

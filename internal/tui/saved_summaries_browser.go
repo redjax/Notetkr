@@ -42,6 +42,13 @@ func NewSavedSummariesBrowser(journalService *services.JournalService) SavedSumm
 	return m
 }
 
+func NewSavedSummariesBrowserWithSize(journalService *services.JournalService, width, height int) SavedSummariesBrowserModel {
+	m := NewSavedSummariesBrowser(journalService)
+	m.width = width
+	m.height = height
+	return m
+}
+
 func (m *SavedSummariesBrowserModel) loadSummaries() {
 	summaries, err := m.journalService.ListWeeklySummaries()
 	if err != nil {
@@ -64,7 +71,7 @@ func (m SavedSummariesBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case WeeklySummaryGeneratedMsg:
 		// Switch to weekly summary viewer
-		return NewWeeklySummaryViewer(m.journalService, msg.summary, msg.weekStart, msg.weekEnd), nil
+		return NewWeeklySummaryViewerWithSize(m.journalService, msg.summary, msg.weekStart, msg.weekEnd, m.width, m.height), nil
 
 	case WeeklySummaryErrorMsg:
 		m.err = msg.err
@@ -77,8 +84,7 @@ func (m SavedSummariesBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "esc", "h", "left":
 			// Return to weekly summary menu
-			return NewWeeklySummaryMenu(m.journalService), nil
-
+			return NewWeeklySummaryMenuWithSize(m.journalService, m.width, m.height), nil
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
