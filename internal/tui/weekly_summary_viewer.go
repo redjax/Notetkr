@@ -170,5 +170,13 @@ func (m WeeklySummaryViewerModel) View() string {
 	// Help
 	s += helpStyle.Render("↑/k ↓/j: scroll • g/G: top/bottom • r: regenerate • esc/h: back • q: quit")
 
+	// Fill the screen
+	if m.width > 0 && m.height > 0 {
+		style := lipgloss.NewStyle().
+			Width(m.width).
+			Height(m.height)
+		return style.Render(s)
+	}
+
 	return s
 }

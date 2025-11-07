@@ -142,6 +142,16 @@ func (m SavedSummariesBrowserModel) View() string {
 	if m.err != nil {
 		s += fmt.Sprintf("  Error: %v\n\n", m.err)
 		s += helpStyle.Render("esc/h: back • q: quit")
+
+		// Center the content and fill the screen
+		if m.width > 0 && m.height > 0 {
+			style := lipgloss.NewStyle().
+				Width(m.width).
+				Height(m.height).
+				AlignHorizontal(lipgloss.Center).
+				AlignVertical(lipgloss.Center)
+			return style.Render(s)
+		}
 		return s
 	}
 
@@ -149,6 +159,16 @@ func (m SavedSummariesBrowserModel) View() string {
 		s += "  No saved summaries found.\n\n"
 		s += "  Generate a weekly summary to create one!\n\n"
 		s += helpStyle.Render("esc/h: back • q: quit")
+
+		// Center the content and fill the screen
+		if m.width > 0 && m.height > 0 {
+			style := lipgloss.NewStyle().
+				Width(m.width).
+				Height(m.height).
+				AlignHorizontal(lipgloss.Center).
+				AlignVertical(lipgloss.Center)
+			return style.Render(s)
+		}
 		return s
 	}
 
@@ -168,6 +188,16 @@ func (m SavedSummariesBrowserModel) View() string {
 	}
 
 	s += "\n" + helpStyle.Render("↑/k ↓/j: navigate • enter/l: view • d: delete • esc/h: back • q: quit")
+
+	// Center the content and fill the screen
+	if m.width > 0 && m.height > 0 {
+		style := lipgloss.NewStyle().
+			Width(m.width).
+			Height(m.height).
+			AlignHorizontal(lipgloss.Center).
+			AlignVertical(lipgloss.Center)
+		return style.Render(s)
+	}
 
 	return s
 }
