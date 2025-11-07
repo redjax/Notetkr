@@ -87,11 +87,21 @@ func (m *CleanMenuApp) Init() tea.Cmd {
 func (m *CleanMenuApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// If cleanup is done, allow exiting
+		// If cleanup is done, allow returning to menu
 		if m.done {
 			switch msg.String() {
-			case "q", "esc", "ctrl+c", "enter":
+			case "ctrl+c":
 				return m, tea.Quit
+			case "q", "esc", "enter", " ":
+				// Reset state and return to menu
+				m.done = false
+				m.running = false
+				m.stats = nil
+				m.notesDeleted = 0
+				m.journalsDeleted = 0
+				m.err = nil
+				m.cleanupType = ""
+				return m, nil
 			}
 			return m, nil
 		}
@@ -107,8 +117,14 @@ func (m *CleanMenuApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Menu navigation
 		switch msg.String() {
-		case "ctrl+c", "q", "esc":
+		case "ctrl+c", "q":
 			return m, tea.Quit
+
+		case "esc", "h", "left":
+			// Return to dashboard
+			return m, func() tea.Msg {
+				return BackToDashboardMsg{}
+			}
 
 		case "up", "k":
 			if m.cursor > 0 {
@@ -204,7 +220,7 @@ func (m *CleanMenuApp) View() string {
 				s += statusStyle.Render(fmt.Sprintf("Deleted %d empty journal(s)", m.journalsDeleted))
 			}
 		}
-		s += "\n" + helpStyle.Render("press any key to exit")
+		s += "\n" + helpStyle.Render("press any key to return to menu • ctrl+c: quit")
 		return s
 	}
 
@@ -256,7 +272,7 @@ func (m *CleanMenuApp) View() string {
 		s += "\n"
 	}
 
-	s += "\n" + helpStyle.Render("↑/↓: navigate • enter: select • q/esc: quit")
+	s += "\n" + helpStyle.Render("↑/↓: navigate • enter: select • esc/h: back • q: quit")
 
 	return s
 }
