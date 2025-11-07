@@ -28,7 +28,7 @@ var (
 					Padding(1, 0)
 
 	weeklySummaryContentStyle = lipgloss.NewStyle().
-					Padding(1, 2)
+					Padding(0, 2)
 )
 
 func NewWeeklySummaryViewer(journalService *services.JournalService, summary string, weekStart, weekEnd time.Time) WeeklySummaryViewerModel {
@@ -38,6 +38,13 @@ func NewWeeklySummaryViewer(journalService *services.JournalService, summary str
 		weekStart:      weekStart,
 		weekEnd:        weekEnd,
 	}
+}
+
+func NewWeeklySummaryViewerWithSize(journalService *services.JournalService, summary string, weekStart, weekEnd time.Time, width, height int) WeeklySummaryViewerModel {
+	m := NewWeeklySummaryViewer(journalService, summary, weekStart, weekEnd)
+	m.width = width
+	m.height = height
+	return m
 }
 
 func (m WeeklySummaryViewerModel) Init() tea.Cmd {
@@ -69,8 +76,7 @@ func (m WeeklySummaryViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "esc", "h", "left":
 			// Return to weekly summary menu
-			return NewWeeklySummaryMenu(m.journalService), nil
-
+			return NewWeeklySummaryMenuWithSize(m.journalService, m.width, m.height), nil
 		case "r":
 			// Regenerate summary
 			return m, m.regenerateSummary
@@ -125,7 +131,16 @@ func (m WeeklySummaryViewerModel) regenerateSummary() tea.Msg {
 
 func (m WeeklySummaryViewerModel) View() string {
 	if m.err != nil {
-		return fmt.Sprintf("\n  Error: %v\n\n  Press 'esc' to return to menu\n", m.err)
+		errMsg := fmt.Sprintf("\n  Error: %v\n\n  Press 'esc' to return to menu\n", m.err)
+		if m.width > 0 && m.height > 0 {
+			style := lipgloss.NewStyle().
+				Width(m.width).
+				Height(m.height).
+				AlignHorizontal(lipgloss.Center).
+				AlignVertical(lipgloss.Center)
+			return style.Render(errMsg)
+		}
+		return errMsg
 	}
 
 	s := weeklySummaryViewerTitleStyle.Render("📊 Weekly Summary") + "\n"
@@ -156,8 +171,17 @@ func (m WeeklySummaryViewerModel) View() string {
 
 	visibleContent := strings.Join(lines[startLine:endLine], "\n")
 
-	// Display summary content with scroll indicator
-	s += weeklySummaryContentStyle.Render(visibleContent) + "\n"
+	// Display summary content - let it expand to full width
+	contentWidth := m.width - 4 // Account for padding
+	if contentWidth < 40 {
+		contentWidth = 80 // Default width
+	}
+
+	contentStyle := lipgloss.NewStyle().
+		Padding(0, 2).
+		Width(contentWidth)
+
+	s += contentStyle.Render(visibleContent) + "\n"
 
 	// Scroll indicator
 	if len(lines) > visibleLines {

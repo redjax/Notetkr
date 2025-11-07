@@ -39,6 +39,13 @@ func NewWeeklySummaryMenu(journalService *services.JournalService) WeeklySummary
 	}
 }
 
+func NewWeeklySummaryMenuWithSize(journalService *services.JournalService, width, height int) WeeklySummaryMenuModel {
+	m := NewWeeklySummaryMenu(journalService)
+	m.width = width
+	m.height = height
+	return m
+}
+
 func (m WeeklySummaryMenuModel) Init() tea.Cmd {
 	return nil
 }
@@ -52,7 +59,7 @@ func (m WeeklySummaryMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case WeeklySummaryGeneratedMsg:
 		// Switch to weekly summary viewer
-		return NewWeeklySummaryViewer(m.journalService, msg.summary, msg.weekStart, msg.weekEnd), nil
+		return NewWeeklySummaryViewerWithSize(m.journalService, msg.summary, msg.weekStart, msg.weekEnd, m.width, m.height), nil
 
 	case WeeklySummaryErrorMsg:
 		// Could add error display here, for now just stay on menu
@@ -85,10 +92,10 @@ func (m WeeklySummaryMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.generateCurrentWeekSummary
 			} else if m.cursor == 1 {
 				// Browse Past Weeks - go to week browser
-				return NewWeekBrowser(m.journalService), nil
+				return NewWeekBrowserWithSize(m.journalService, m.width, m.height), nil
 			} else {
 				// Browse Saved Summaries - go to saved summaries browser
-				return NewSavedSummariesBrowser(m.journalService), nil
+				return NewSavedSummariesBrowserWithSize(m.journalService, m.width, m.height), nil
 			}
 		}
 	}
