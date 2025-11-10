@@ -435,14 +435,26 @@ func (m SearchBrowserModel) View() string {
 				availableHeight = 10
 			}
 
-			// Show results
-			start := m.cursor
-			if !m.searchInput.Focused() && m.cursor >= availableHeight {
-				start = m.cursor - availableHeight + 1
-			}
-			end := start + availableHeight
-			if end > len(m.results) {
-				end = len(m.results)
+			// Calculate visible window
+			start := 0
+			end := len(m.results)
+
+			// Only scroll if results don't fit
+			if len(m.results) > availableHeight {
+				// Keep cursor in view, scroll the window
+				if m.cursor < availableHeight/2 {
+					// Near top, show from beginning
+					start = 0
+					end = availableHeight
+				} else if m.cursor >= len(m.results)-availableHeight/2 {
+					// Near bottom, show last items
+					start = len(m.results) - availableHeight
+					end = len(m.results)
+				} else {
+					// Middle, center cursor
+					start = m.cursor - availableHeight/2
+					end = start + availableHeight
+				}
 			}
 
 			for i := start; i < end; i++ {
@@ -501,8 +513,7 @@ func (m SearchBrowserModel) View() string {
 	if m.width > 0 && m.height > 0 {
 		style := lipgloss.NewStyle().
 			Width(m.width).
-			Height(m.height).
-			Padding(1, 2)
+			Height(m.height)
 		return style.Render(content)
 	}
 

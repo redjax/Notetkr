@@ -35,6 +35,8 @@ type CleanMenuApp struct {
 	stats           *services.CleanupStats
 	notesDeleted    int
 	journalsDeleted int
+	width           int
+	height          int
 	err             error
 }
 
@@ -80,12 +82,24 @@ func NewCleanMenuApp(cfg *config.Config) *CleanMenuApp {
 	}
 }
 
+func NewCleanMenuAppWithSize(cfg *config.Config, width, height int) *CleanMenuApp {
+	m := NewCleanMenuApp(cfg)
+	m.width = width
+	m.height = height
+	return m
+}
+
 func (m *CleanMenuApp) Init() tea.Cmd {
 	return nil
 }
 
 func (m *CleanMenuApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+
 	case tea.KeyMsg:
 		// If cleanup is done, allow returning to menu
 		if m.done {
@@ -221,6 +235,16 @@ func (m *CleanMenuApp) View() string {
 			}
 		}
 		s += "\n" + helpStyle.Render("press any key to return to menu • ctrl+c: quit")
+
+		// Center and fill the screen
+		if m.width > 0 && m.height > 0 {
+			style := lipgloss.NewStyle().
+				Width(m.width).
+				Height(m.height).
+				AlignHorizontal(lipgloss.Center).
+				AlignVertical(lipgloss.Center)
+			return style.Render(s)
+		}
 		return s
 	}
 
@@ -244,6 +268,16 @@ func (m *CleanMenuApp) View() string {
 		s += fmt.Sprintf("%s %s\n\n", m.spinner.View(), statusStyle.Render(message))
 		s += statusStyle.Render("Please wait...") + "\n\n"
 		s += helpStyle.Render("ctrl+c: cancel")
+
+		// Center and fill the screen
+		if m.width > 0 && m.height > 0 {
+			style := lipgloss.NewStyle().
+				Width(m.width).
+				Height(m.height).
+				AlignHorizontal(lipgloss.Center).
+				AlignVertical(lipgloss.Center)
+			return style.Render(s)
+		}
 		return s
 	}
 
@@ -273,6 +307,16 @@ func (m *CleanMenuApp) View() string {
 	}
 
 	s += "\n" + helpStyle.Render("↑/↓: navigate • enter: select • esc/h: back • q: quit")
+
+	// Center and fill the screen
+	if m.width > 0 && m.height > 0 {
+		style := lipgloss.NewStyle().
+			Width(m.width).
+			Height(m.height).
+			AlignHorizontal(lipgloss.Center).
+			AlignVertical(lipgloss.Center)
+		return style.Render(s)
+	}
 
 	return s
 }
