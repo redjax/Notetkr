@@ -130,7 +130,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.currentView.Init()
 		case "clean":
 			// Open clean menu
-			m.currentView = NewCleanMenuApp(m.cfg)
+			m.currentView = NewCleanMenuAppWithSize(m.cfg, m.width, m.height)
 			return m, m.currentView.Init()
 		}
 	case OpenJournalMsg:
