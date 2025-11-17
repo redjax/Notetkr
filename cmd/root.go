@@ -10,6 +10,7 @@ import (
 	"github.com/redjax/notetkr/internal/commands"
 	"github.com/redjax/notetkr/internal/config"
 	"github.com/redjax/notetkr/internal/tui"
+	"github.com/redjax/notetkr/internal/version"
 
 	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/providers/env"
@@ -42,6 +43,7 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config-file", "c", "", "config file (supports .yml, .json, .toml, .env)")
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "D", false, "Enable debug logging")
+	rootCmd.PersistentFlags().BoolP("version", "v", false, "Print version and exit")
 
 	// Add subcommands - they will get config when executed
 	rootCmd.AddCommand(commands.NewJournalCmd(func() *config.Config { return cfg }))
@@ -54,6 +56,13 @@ func init() {
 
 	// Handle persistent flags
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		// Handle --version flag
+		v, _ := cmd.Flags().GetBool("version")
+		if v {
+			fmt.Println(version.GetVersionString())
+			os.Exit(0)
+		}
+
 		// Handle --debug flag
 		if d, _ := cmd.Flags().GetBool("debug"); d {
 			log.SetFlags(log.LstdFlags | log.Lshortfile)
