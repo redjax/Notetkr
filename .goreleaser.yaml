@@ -22,6 +22,11 @@ builds:
     env:
       - CGO_ENABLED=0
     main: ./cmd/entrypoints/main.go
+    ldflags:
+      - -s -w
+      - -X github.com/redjax/notetkr/internal/version.Version={{.Version}}
+      - -X github.com/redjax/notetkr/internal/version.Commit={{.Commit}}
+      - -X github.com/redjax/notetkr/internal/version.Date={{.Date}}
     goos:
       - linux
       - windows
