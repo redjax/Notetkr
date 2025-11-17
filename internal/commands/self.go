@@ -5,6 +5,7 @@ import (
 	"runtime"
 
 	"github.com/redjax/notetkr/internal/config"
+	"github.com/redjax/notetkr/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -15,6 +16,12 @@ func NewSelfCmd(getConfig func() *config.Config) *cobra.Command {
 		Short: "Manage Notetkr installation",
 		Long:  `Commands for managing the Notetkr application itself.`,
 	}
+
+	// Add version subcommand
+	cmd.AddCommand(version.NewVersionCommand())
+
+	// Add info subcommand
+	cmd.AddCommand(version.NewInfoCommand())
 
 	// Add upgrade subcommand
 	upgradeCmd := &cobra.Command{

@@ -28,7 +28,30 @@ if ( $UseGoreleaser ) {
 ## Use Go
 } else {
     Write-Host "Building local/development version of app with Go" -ForegroundColor Cyan
-    go build -o ./dist/nt.exe -ldflags "-X 'main.buildType=development'" ./cmd/entrypoints/main.go
+    
+    # Get version info
+    try {
+        $GitVersion = git describe --tags --always 2>$null
+        if ($LASTEXITCODE -ne 0) { $GitVersion = "dev" }
+    } catch {
+        $GitVersion = "dev"
+    }
+
+    try {
+        $GitCommit = git rev-parse --short HEAD 2>$null
+        if ($LASTEXITCODE -ne 0) { $GitCommit = "none" }
+    } catch {
+        $GitCommit = "none"
+    }
+
+    $BuildDate = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+    $LD_FLAGS = "-s -w " +
+        "-X 'github.com/redjax/notetkr/internal/version.Version=$GitVersion' " +
+        "-X 'github.com/redjax/notetkr/internal/version.Commit=$GitCommit' " +
+        "-X 'github.com/redjax/notetkr/internal/version.Date=$BuildDate'"
+
+    go build -o ./dist/nt.exe -ldflags "$LD_FLAGS" ./cmd/entrypoints/main.go
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Go build failed"
         exit $LASTEXITCODE
