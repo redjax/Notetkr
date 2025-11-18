@@ -179,7 +179,7 @@ func (m JournalEditorModel) createOrReadCustomJournal() (string, error) {
 	}
 
 	// File doesn't exist, create it with default template
-	template := fmt.Sprintf("# Journal Entry\n\n## Tasks\n\n- \n")
+	template := "# Journal Entry\n\n## Tasks\n\n- \n"
 
 	// Ensure directory exists
 	dir := filepath.Dir(m.filePath)
