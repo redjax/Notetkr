@@ -36,3 +36,22 @@ func NewInfoCommand() *cobra.Command {
 		},
 	}
 }
+
+// NewUpgradeCommand creates the 'self upgrade' command.
+func NewUpgradeCommand() *cobra.Command {
+	var checkOnly bool
+
+	cmd := &cobra.Command{
+		Use:     "upgrade",
+		Aliases: []string{"update"},
+		Short:   "Upgrade notetkr to the latest release",
+		Long:    "Download and install the latest notetkr release from GitHub.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return UpgradeSelf(cmd, args, checkOnly)
+		},
+	}
+
+	cmd.Flags().BoolVar(&checkOnly, "check", false, "Only check for latest version, don't upgrade if one is found.")
+
+	return cmd
+}

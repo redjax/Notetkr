@@ -6,11 +6,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/redjax/notetkr/internal/version"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/redjax/notetkr/internal/commands"
 	"github.com/redjax/notetkr/internal/config"
 	"github.com/redjax/notetkr/internal/tui"
-	"github.com/redjax/notetkr/internal/version"
 
 	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/providers/env"
@@ -37,6 +38,9 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
+	// Check for pending upgrade and apply if found
+	version.TrySelfUpgrade()
+
 	cobra.CheckErr(rootCmd.Execute())
 }
 
