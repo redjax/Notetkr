@@ -229,11 +229,26 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.filePath = msg.filePath
 		m.textarea.SetValue(msg.content)
 		m.wasJustCreated = msg.wasCreated // Track if this was newly created
-		// Reset cursor to start of document
-		m.textarea.CursorStart()
 		// Initialize undo stack with the loaded content
 		m.lastContent = msg.content
 		m.initialContent = msg.content
+		// Position cursor appropriately - return a command to do this after SetValue processes
+		if msg.wasCreated {
+			return m, func() tea.Msg {
+				return PositionCursorMsg{}
+			}
+		}
+		return m, nil
+
+	case PositionCursorMsg:
+		// This runs after SetValue has been processed
+		// For new journals, move to line 4 (the "- " line)
+		m.textarea.SetCursor(0) // Start at beginning
+		for i := 0; i < 4; i++ {
+			m.textarea.CursorDown()
+		}
+		// Move to end of line (after "- ")
+		m.textarea.CursorEnd()
 		return m, nil
 
 	case JournalEditorErrorMsg:
@@ -470,12 +485,12 @@ func (m JournalEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "tab":
 				// Indent current line
 				m.indentCurrentLine()
-				return m, textarea.Blink
+				return m, nil
 
 			case "shift+tab":
 				// Unindent current line
 				m.unindentCurrentLine()
-				return m, textarea.Blink
+				return m, nil
 
 			case "ctrl+c":
 				return m, tea.Quit
@@ -791,43 +806,36 @@ func (m *JournalEditorModel) insertNewLineWithIndent() tea.Cmd {
 
 // indentCurrentLine adds indentation to the current line (for Tab key)
 func (m *JournalEditorModel) indentCurrentLine() {
+	// Save current column position
 	lineInfo := m.textarea.LineInfo()
-	currentLineNum := m.textarea.Line()
 	col := lineInfo.ColumnOffset
 
-	content := m.textarea.Value()
-	lines := strings.Split(content, "\n")
+	// Move to start of current line
+	m.textarea.CursorStart()
 
-	if currentLineNum >= len(lines) {
-		return
+	// Insert two spaces by simulating keypress
+	for i := 0; i < 2; i++ {
+		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
 	}
 
-	// Add two spaces at the start of the current line
-	lines[currentLineNum] = "  " + lines[currentLineNum]
-	newContent := strings.Join(lines, "\n")
-
-	m.textarea.SetValue(newContent)
-
-	// Calculate and set new cursor position
-	// Position = sum of all previous lines + newlines + column offset + 2 added spaces
-	newPos := 0
-	for i := 0; i < currentLineNum; i++ {
-		newPos += len(lines[i]) + 1 // +1 for newline
+	// Restore cursor to its original column position (now shifted right by 2)
+	// Move back to start of line first
+	m.textarea.CursorStart()
+	// Then move to the new position (original + 2 spaces)
+	for i := 0; i < col+2; i++ {
+		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRight})
 	}
-	newPos += col + 2
-
-	m.textarea.SetCursor(newPos)
-	m.trackContentChange()
 }
 
 // unindentCurrentLine removes indentation from the current line (for Shift+Tab)
 func (m *JournalEditorModel) unindentCurrentLine() {
+	// Save current column position
 	lineInfo := m.textarea.LineInfo()
-	currentLineNum := m.textarea.Line()
 	col := lineInfo.ColumnOffset
 
 	content := m.textarea.Value()
 	lines := strings.Split(content, "\n")
+	currentLineNum := m.textarea.Line()
 
 	if currentLineNum >= len(lines) {
 		return
@@ -835,38 +843,37 @@ func (m *JournalEditorModel) unindentCurrentLine() {
 
 	currentLine := lines[currentLineNum]
 
-	// Remove up to 2 spaces from the start of the line
-	removed := 0
+	// Check how many spaces to remove
+	removeCount := 0
 	if strings.HasPrefix(currentLine, "  ") {
-		lines[currentLineNum] = currentLine[2:]
-		removed = 2
+		removeCount = 2
 	} else if strings.HasPrefix(currentLine, " ") {
-		lines[currentLineNum] = currentLine[1:]
-		removed = 1
+		removeCount = 1
 	} else if strings.HasPrefix(currentLine, "\t") {
-		lines[currentLineNum] = currentLine[1:]
-		removed = 1
-	} else {
-		// No indentation to remove
-		return
+		removeCount = 1
 	}
 
-	newContent := strings.Join(lines, "\n")
-	m.textarea.SetValue(newContent)
-
-	// Calculate new cursor position
-	newPos := 0
-	for i := 0; i < currentLineNum; i++ {
-		newPos += len(lines[i]) + 1 // +1 for newline
+	if removeCount == 0 {
+		return // Nothing to remove
 	}
-	newColOffset := col - removed
-	if newColOffset < 0 {
-		newColOffset = 0
-	}
-	newPos += newColOffset
 
-	m.textarea.SetCursor(newPos)
-	m.trackContentChange()
+	// Move to start of line
+	m.textarea.CursorStart()
+
+	// Delete the spaces using backspace (which deletes forward at line start)
+	for i := 0; i < removeCount; i++ {
+		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyDelete})
+	}
+
+	// Restore cursor to its column position (now shifted left)
+	newCol := col - removeCount
+	if newCol < 0 {
+		newCol = 0
+	}
+	// Move to the new position
+	for i := 0; i < newCol; i++ {
+		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRight})
+	}
 }
 
 // pasteImage handles pasting an image from the clipboard
@@ -1002,3 +1009,5 @@ type JournalEditorErrorMsg struct {
 type JournalSavedMsg struct{}
 
 type ClearSaveMsg struct{}
+
+type PositionCursorMsg struct{}
