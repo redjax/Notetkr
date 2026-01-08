@@ -128,6 +128,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Open search browser
 			m.currentView = NewSearchBrowser(m.journalService, m.notesService, m.width, m.height)
 			return m, m.currentView.Init()
+		case "import-export":
+			// Open import/export menu
+			m.currentView = NewImportExportMenu(m.width, m.height)
+			return m, m.currentView.Init()
 		case "clean":
 			// Open clean menu
 			m.currentView = NewCleanMenuAppWithSize(m.cfg, m.width, m.height)
@@ -213,6 +217,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.currentView, cmd = m.currentView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 		}
 		return m, tea.Batch(cmd, m.currentView.Init())
+	case ExportDataMsg:
+		// Forward to current view to handle
+		m.currentView, cmd = m.currentView.Update(msg)
+		return m, cmd
+	case ImportDataMsg:
+		// Forward to current view to handle
+		m.currentView, cmd = m.currentView.Update(msg)
+		return m, cmd
 	}
 
 	m.currentView, cmd = m.currentView.Update(msg)

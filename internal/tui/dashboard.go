@@ -33,6 +33,7 @@ func NewDashboard() DashboardModel {
 			"Journals",
 			"Notes",
 			"Search",
+			"Import/Export",
 			"Clean",
 			"Quit",
 		},
@@ -88,11 +89,15 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, func() tea.Msg {
 					return MenuSelectionMsg{Selection: "search"}
 				}
-			case 4: // Clean
+			case 4: // Import/Export
+				return m, func() tea.Msg {
+					return MenuSelectionMsg{Selection: "import-export"}
+				}
+			case 5: // Clean
 				return m, func() tea.Msg {
 					return MenuSelectionMsg{Selection: "clean"}
 				}
-			case 5: // Quit
+			case 6: // Quit
 				return m, tea.Quit
 			}
 		}
