@@ -113,11 +113,37 @@ func (m *JournalBrowserModel) loadItems() {
 	}
 
 	// Sort
-	sort.Strings(dirs)                               // Directories A-Z
-	sort.Sort(sort.Reverse(sort.StringSlice(files))) // Files Z-A (newest first)
+	// Separate summaries folder from year folders
+	var summariesFolder []string
+	var yearFolders []string
+	var otherFolders []string
 
-	// Add folders first (years, months, days)
 	for _, dir := range dirs {
+		if dir == "summaries" {
+			summariesFolder = append(summariesFolder, dir)
+		} else if len(dir) == 4 && dir >= "2000" && dir <= "2099" {
+			// Year folder (4 digits starting with 20)
+			yearFolders = append(yearFolders, dir)
+		} else {
+			otherFolders = append(otherFolders, dir)
+		}
+	}
+
+	// Sort year folders in descending order (newest first)
+	sort.Sort(sort.Reverse(sort.StringSlice(yearFolders)))
+	// Sort other folders alphabetically
+	sort.Strings(otherFolders)
+	// Sort files Z-A (newest first)
+	sort.Sort(sort.Reverse(sort.StringSlice(files)))
+
+	// Add folders in order: summaries, then years descending, then others
+	for _, dir := range summariesFolder {
+		m.items = append(m.items, "📁 "+dir)
+	}
+	for _, dir := range yearFolders {
+		m.items = append(m.items, "📁 "+dir)
+	}
+	for _, dir := range otherFolders {
 		m.items = append(m.items, "📁 "+dir)
 	}
 
