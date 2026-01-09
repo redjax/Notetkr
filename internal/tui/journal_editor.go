@@ -629,40 +629,32 @@ func (m *JournalEditorModel) deleteLine() {
 	m.trackContentChange()
 
 	lines := strings.Split(content, "\n")
-	lineInfo := m.textarea.Line()
-	currentLine := lineInfo
+	currentLineNum := m.textarea.Line()
 
 	// Check bounds
-	if currentLine >= len(lines) {
+	if currentLineNum >= len(lines) {
 		return
 	}
 
-	// Remove the current line
-	newLines := append(lines[:currentLine], lines[currentLine+1:]...)
-	newContent := strings.Join(newLines, "\n")
+	currentLineText := lines[currentLineNum]
 
-	// If we deleted the last line and there's content remaining, ensure proper ending
-	if currentLine >= len(newLines) && len(newLines) > 0 {
-		currentLine = len(newLines) - 1
+	// Move to start of line
+	m.textarea.CursorStart()
+
+	// Delete all characters on the line
+	for i := 0; i < len(currentLineText); i++ {
+		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyDelete})
 	}
 
-	// Update content
-	m.textarea.SetValue(newContent)
-
-	// Position cursor at the beginning of the same line number (or last line if we deleted the last line)
-	// We need to count newlines to position correctly
-	if currentLine > 0 {
-		targetPos := 0
-		for i := 0; i < currentLine; i++ {
-			if i < len(newLines) {
-				targetPos += len(newLines[i]) + 1 // +1 for newline
-			}
-		}
-		m.textarea.SetCursor(targetPos)
-	} else {
-		m.textarea.SetCursor(0)
+	// If this isn't the last line, delete the newline character too
+	if currentLineNum < len(lines)-1 {
+		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyDelete})
+	} else if currentLineNum > 0 {
+		// If it's the last line but not the only line, delete the newline before it
+		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyBackspace})
 	}
 
+	// Cursor is now at the start of what was the next line (or end of previous line)
 	// Track the change after deletion
 	m.trackContentChange()
 }
@@ -694,27 +686,9 @@ func (m *JournalEditorModel) deleteChar() {
 		return
 	}
 
-	// Delete the character at cursor position
-	newLineText := currentLineText[:cursorCol] + currentLineText[cursorCol+1:]
-	lines[currentLine] = newLineText
-
-	// Reconstruct content
-	newContent := strings.Join(lines, "\n")
-
-	// Update the content
-	m.textarea.SetValue(newContent)
-
-	// Restore cursor position by moving to the correct line and column
-	// Reset to start
-	m.textarea.SetCursor(0)
-
-	// Move down to the correct line
-	for i := 0; i < currentLine; i++ {
-		m.textarea.CursorDown()
-	}
-
-	// Move to the correct column position
-	m.textarea.SetCursor(cursorCol)
+	// Use the built-in delete key to remove the character under the cursor
+	// This keeps the cursor in place
+	m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyDelete})
 
 	// Track the change after deletion
 	m.trackContentChange()
