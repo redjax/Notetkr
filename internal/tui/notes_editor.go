@@ -298,12 +298,25 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.showQuitConfirm {
 				switch msg.String() {
 				case "y", "Y":
-					// User confirmed quit
+					// User wants to save before quitting
+					m.showQuitConfirm = false
+					m.saved = false
+					m.saveMsg = "Saving..."
+					// Save and then return to browser
+					return m, tea.Batch(
+						m.saveNote,
+						func() tea.Msg {
+							return BackToNotesBrowserMsg{}
+						},
+					)
+				case "n", "N":
+					// User wants to quit without saving
+					m.showQuitConfirm = false
 					return m, func() tea.Msg {
 						return BackToNotesBrowserMsg{}
 					}
-				case "n", "N", "esc":
-					// User cancelled quit
+				case "esc":
+					// User cancelled, stay in editor
 					m.showQuitConfirm = false
 					return m, nil
 				}
@@ -977,7 +990,7 @@ func (m NotesEditorModel) View() string {
 			confirmStyle := lipgloss.NewStyle().
 				Foreground(lipgloss.Color("226")).
 				Bold(true)
-			b.WriteString(confirmStyle.Render("⚠ You have unsaved changes. Quit anyway? (y/n)"))
+			b.WriteString(confirmStyle.Render("⚠ You have unsaved changes. Save before quitting? (y/n, esc to cancel)"))
 			b.WriteString("\n\n")
 		}
 
