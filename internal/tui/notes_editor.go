@@ -503,6 +503,26 @@ func (m NotesEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.unindentCurrentLine()
 				return m, textarea.Blink
 
+			case "ctrl+left":
+				// Jump backwards by word
+				m.jumpWordBackward()
+				return m, nil
+
+			case "ctrl+right":
+				// Jump forward by word
+				m.jumpWordForward()
+				return m, nil
+
+			case "ctrl+backspace":
+				// Delete word backwards
+				m.deleteWordBackward()
+				return m, nil
+
+			case "ctrl+delete":
+				// Delete word forwards
+				m.deleteWordForward()
+				return m, nil
+
 			default:
 				m.textarea, cmd = m.textarea.Update(msg)
 				return m, cmd
@@ -789,6 +809,214 @@ func (m *NotesEditorModel) isEmpty() bool {
 
 	// Empty if no content or content matches initial template
 	return content == "" || content == initialContent
+}
+
+// jumpWordBackward moves cursor to the beginning of the previous word
+func (m *NotesEditorModel) jumpWordBackward() {
+	content := m.textarea.Value()
+	if content == "" {
+		return
+	}
+
+	// Get current cursor position
+	lineInfo := m.textarea.LineInfo()
+	currentLine := m.textarea.Line()
+	cursorCol := lineInfo.ColumnOffset
+
+	lines := strings.Split(content, "\n")
+	if currentLine >= len(lines) {
+		return
+	}
+
+	// Calculate absolute position in text
+	absPos := 0
+	for i := 0; i < currentLine; i++ {
+		absPos += len(lines[i]) + 1 // +1 for newline
+	}
+	absPos += cursorCol
+
+	// If we're at the start, do nothing
+	if absPos == 0 {
+		return
+	}
+
+	// Move back to find the start of the previous word
+	newPos := absPos - 1
+
+	// Skip any whitespace or punctuation backwards
+	for newPos > 0 && !isWordChar(rune(content[newPos])) {
+		newPos--
+	}
+
+	// Skip the word characters backwards
+	for newPos > 0 && isWordChar(rune(content[newPos-1])) {
+		newPos--
+	}
+
+	// Calculate how many positions to move left
+	movements := absPos - newPos
+	for i := 0; i < movements; i++ {
+		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	}
+}
+
+// jumpWordForward moves cursor to the beginning of the next word
+func (m *NotesEditorModel) jumpWordForward() {
+	content := m.textarea.Value()
+	if content == "" {
+		return
+	}
+
+	// Get current cursor position
+	lineInfo := m.textarea.LineInfo()
+	currentLine := m.textarea.Line()
+	cursorCol := lineInfo.ColumnOffset
+
+	lines := strings.Split(content, "\n")
+	if currentLine >= len(lines) {
+		return
+	}
+
+	// Calculate absolute position in text
+	absPos := 0
+	for i := 0; i < currentLine; i++ {
+		absPos += len(lines[i]) + 1 // +1 for newline
+	}
+	absPos += cursorCol
+
+	// If we're at the end, do nothing
+	if absPos >= len(content) {
+		return
+	}
+
+	// Move forward to find the start of the next word
+	newPos := absPos
+
+	// Skip the current word if we're on one
+	for newPos < len(content) && isWordChar(rune(content[newPos])) {
+		newPos++
+	}
+
+	// Skip any whitespace or punctuation forwards
+	for newPos < len(content) && !isWordChar(rune(content[newPos])) {
+		newPos++
+	}
+
+	// Calculate how many positions to move right
+	movements := newPos - absPos
+	for i := 0; i < movements; i++ {
+		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRight})
+	}
+}
+
+// deleteWordBackward deletes from cursor position back to the start of the word
+func (m *NotesEditorModel) deleteWordBackward() {
+	content := m.textarea.Value()
+	if content == "" {
+		return
+	}
+
+	// Save current state before deletion
+	m.trackContentChange()
+
+	// Get current cursor position
+	lineInfo := m.textarea.LineInfo()
+	currentLine := m.textarea.Line()
+	cursorCol := lineInfo.ColumnOffset
+
+	lines := strings.Split(content, "\n")
+	if currentLine >= len(lines) {
+		return
+	}
+
+	// Calculate absolute position in text
+	absPos := 0
+	for i := 0; i < currentLine; i++ {
+		absPos += len(lines[i]) + 1 // +1 for newline
+	}
+	absPos += cursorCol
+
+	// If we're at the start, do nothing
+	if absPos == 0 {
+		return
+	}
+
+	// Find the start of the word to delete
+	startPos := absPos - 1
+
+	// Skip any whitespace or punctuation backwards
+	for startPos > 0 && !isWordChar(rune(content[startPos])) {
+		startPos--
+	}
+
+	// Skip the word characters backwards
+	for startPos > 0 && isWordChar(rune(content[startPos-1])) {
+		startPos--
+	}
+
+	// Perform the deletion by using backspace
+	deletions := absPos - startPos
+	for i := 0; i < deletions; i++ {
+		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	}
+
+	// Track the change after deletion
+	m.trackContentChange()
+}
+
+// deleteWordForward deletes from cursor position forward to the end of the word
+func (m *NotesEditorModel) deleteWordForward() {
+	content := m.textarea.Value()
+	if content == "" {
+		return
+	}
+
+	// Save current state before deletion
+	m.trackContentChange()
+
+	// Get current cursor position
+	lineInfo := m.textarea.LineInfo()
+	currentLine := m.textarea.Line()
+	cursorCol := lineInfo.ColumnOffset
+
+	lines := strings.Split(content, "\n")
+	if currentLine >= len(lines) {
+		return
+	}
+
+	// Calculate absolute position in text
+	absPos := 0
+	for i := 0; i < currentLine; i++ {
+		absPos += len(lines[i]) + 1 // +1 for newline
+	}
+	absPos += cursorCol
+
+	// If we're at the end, do nothing
+	if absPos >= len(content) {
+		return
+	}
+
+	// Find the end of the word to delete
+	endPos := absPos
+
+	// Skip the current word if we're on one
+	for endPos < len(content) && isWordChar(rune(content[endPos])) {
+		endPos++
+	}
+
+	// Skip any whitespace or punctuation forwards
+	for endPos < len(content) && !isWordChar(rune(content[endPos])) {
+		endPos++
+	}
+
+	// Perform the deletion by using delete key
+	deletions := endPos - absPos
+	for i := 0; i < deletions; i++ {
+		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyDelete})
+	}
+
+	// Track the change after deletion
+	m.trackContentChange()
 }
 
 // getCurrentLineIndentAndPrefix returns the indentation and list prefix of the current line
